@@ -2552,8 +2552,6 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "bnum",
- "sha256",
 ]
 
 [[package]]
@@ -2563,12 +2561,15 @@ dependencies = [
  "anchor-client",
  "anchor-spl",
  "base64 0.21.5",
+ "bincode",
  "bnum",
  "cached",
  "clap 4.4.12",
  "futures",
  "log",
  "ore",
+ "rand 0.8.5",
+ "rayon",
  "sha256",
  "solana-client",
  "solana-sdk",
