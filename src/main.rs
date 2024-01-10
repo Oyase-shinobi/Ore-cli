@@ -14,7 +14,7 @@ use anchor_client::{
 use anchor_spl::token::{spl_token, TokenAccount};
 use cached::proc_macro::cached;
 use clap::{command, Parser};
-use ore::{self, Metadata, Miner, BUS, DIFFICULTY, EPOCH_DURATION, METADATA, MINER};
+use ore::{self, Metadata, Proof, BUS, BUS_COUNT, DIFFICULTY, EPOCH_DURATION, METADATA, PROOF};
 use rand::Rng;
 use rayon::prelude::*;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -83,7 +83,7 @@ async fn main() {
 
     // Sync local state with on-chain data.
     let metadata = get_metadata(cluster.clone()).await;
-    let miner_acc = get_miner_account(cluster.clone(), keypair.pubkey()).await;
+    let proof = get_proof(cluster.clone(), keypair.pubkey()).await;
     let mint = metadata.mint;
 
     // Initialize beneficiary token account.
@@ -100,7 +100,7 @@ async fn main() {
     let miner = Arc::new(MinerH::new(cluster.clone(), &keypair, beneficiary, mint));
 
     // Start mining.
-    miner.mine(cluster, miner_acc.hash).await;
+    miner.mine(cluster, proof.hash).await;
 }
 
 impl<'a> MinerH<'a> {
@@ -129,7 +129,7 @@ impl<'a> MinerH<'a> {
 
     pub async fn mine(&self, cluster: Cluster, hash: Hash) {
         let mut hash = hash;
-        let miner_address = miner_pubkey(self.keypair.pubkey());
+        let proof_address = proof_pubkey(self.keypair.pubkey());
         let mut rng = rand::thread_rng();
         loop {
             // Find a valid hash.
@@ -151,7 +151,7 @@ impl<'a> MinerH<'a> {
                     .request()
                     .instruction(Instruction {
                         program_id: ore::ID,
-                        accounts: (ore::accounts::StartEpoch {
+                        accounts: (ore::accounts::ResetEpoch {
                             signer: self.keypair.pubkey(),
                             metadata: metadata_pubkey(),
                             bus_0: bus_pubkey(0),
@@ -164,7 +164,7 @@ impl<'a> MinerH<'a> {
                             bus_7: bus_pubkey(7),
                         })
                         .to_account_metas(Some(false)),
-                        data: ore::instruction::StartEpoch {}.data(),
+                        data: ore::instruction::ResetEpoch {}.data(),
                     })
                     .signer(self.keypair)
                     .send()
@@ -182,11 +182,11 @@ impl<'a> MinerH<'a> {
                     accounts: (ore::accounts::Mine {
                         signer: self.keypair.pubkey(),
                         beneficiary: self.beneficiary,
-                        miner: miner_address,
+                        proof: proof_address,
                         metadata: metadata_pubkey(),
                         mint: self.mint,
                         token_program: anchor_spl::token::ID,
-                        bus: bus_pubkey(rng.gen_range(0..8)),
+                        bus: bus_pubkey(rng.gen_range(0..BUS_COUNT)),
                     })
                     .to_account_metas(Some(false)),
                     data: ore::instruction::Mine {
@@ -204,7 +204,7 @@ impl<'a> MinerH<'a> {
         }
     }
 
-    fn find_next_hash(&self, hash: Hash) -> (Hash, u64) {
+    fn _find_next_hash(&self, hash: Hash) -> (Hash, u64) {
         let mut next_hash: Hash;
         let mut nonce = 0u64;
         loop {
@@ -275,15 +275,15 @@ pub async fn get_metadata(cluster: Cluster) -> Metadata {
     Metadata::deserialize(&mut &data.as_slice()[8..]).expect("Failed to parse metadata account")
 }
 
-pub async fn get_miner_account(cluster: Cluster, authority: Pubkey) -> Miner {
+pub async fn get_proof(cluster: Cluster, authority: Pubkey) -> Proof {
     let client =
         RpcClient::new_with_commitment(cluster.url().to_string(), CommitmentConfig::processed());
-    let miner_address = miner_pubkey(authority);
+    let proof_address = proof_pubkey(authority);
     let data = client
-        .get_account_data(&miner_address)
+        .get_account_data(&proof_address)
         .await
         .expect("Failed to get miner account");
-    Miner::deserialize(&mut &data.as_slice()[8..]).expect("Failed to parse miner account")
+    Proof::deserialize(&mut &data.as_slice()[8..]).expect("Failed to parse miner account")
 }
 
 pub async fn get_clock_account(cluster: Cluster) -> Clock {
@@ -352,23 +352,23 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
 async fn initialize_miner_account(cluster: Cluster, keypair_filepath: String) {
     // Return early if program is initialized
     let signer = read_keypair_file(keypair_filepath).unwrap();
-    let miner_address = miner_pubkey(signer.pubkey());
+    let proof_address = proof_pubkey(signer.pubkey());
     let client =
         RpcClient::new_with_commitment(cluster.url().to_string(), CommitmentConfig::processed());
-    if client.get_account(&miner_address).await.is_ok() {
+    if client.get_account(&proof_address).await.is_ok() {
         return;
     }
 
     // Build instructions.
     let ix = Instruction {
         program_id: ore::ID,
-        accounts: (ore::accounts::RegisterMiner {
+        accounts: (ore::accounts::Register {
             signer: signer.pubkey(),
-            miner: miner_address,
+            proof: proof_address,
             system_program: system_program::ID,
         })
         .to_account_metas(Some(false)),
-        data: ore::instruction::RegisterMiner {}.data(),
+        data: ore::instruction::Register {}.data(),
     };
 
     // Sign and send transaction.
@@ -438,8 +438,8 @@ fn metadata_pubkey() -> Pubkey {
 }
 
 #[cached]
-fn miner_pubkey(authority: Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[MINER, authority.as_ref()], &ore::ID).0
+fn proof_pubkey(authority: Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[PROOF, authority.as_ref()], &ore::ID).0
 }
 
 #[cached]
