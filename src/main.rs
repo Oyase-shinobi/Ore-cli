@@ -19,7 +19,6 @@ use cached::proc_macro::cached;
 use clap::{command, Parser};
 use ore::{self, Metadata, Proof, BUS, BUS_COUNT, DIFFICULTY, EPOCH_DURATION, METADATA, PROOF};
 use rand::Rng;
-use rayon::prelude::*;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     clock::Clock,
@@ -29,6 +28,8 @@ use solana_sdk::{
     system_instruction,
     transaction::Transaction,
 };
+
+const NUM_THREADS: u64 = 6;
 
 struct MinerH<'a> {
     pub keypair: &'a Keypair,
@@ -248,34 +249,73 @@ impl<'a> MinerH<'a> {
             Hash::new_from_array([0; 32]),
             0,
         )));
-        let seed = u64::MAX.saturating_div(4);
-        let data = [0, seed, seed.saturating_mul(2), seed.saturating_mul(3)];
+
         println!("Searching for a valid hash...");
-        data.par_iter().for_each(|n| {
-            let mut next_hash: Hash;
-            let mut nonce: u64 = *n;
-            loop {
-                if nonce % 10_000 == 0 {
-                    if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
-                        return;
+        let pubkey = self.keypair.pubkey();
+        let thread_handles: Vec<_> = (0..NUM_THREADS)
+            .map(|i| {
+                std::thread::spawn({
+                    let found_solution = found_solution.clone();
+                    let solution = solution.clone();
+                    move || {
+                        let n = u64::MAX.saturating_div(NUM_THREADS).saturating_mul(i);
+                        let mut next_hash: Hash;
+                        let mut nonce: u64 = n;
+                        loop {
+                            if nonce % 10_000 == 0 {
+                                if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
+                                    return;
+                                }
+                            }
+                            let b = [
+                                hash.to_bytes().as_slice(),
+                                pubkey.to_bytes().as_slice(),
+                                nonce.to_be_bytes().as_slice(),
+                            ]
+                            .concat();
+                            next_hash = hashv(&[&b]);
+                            if next_hash.le(&DIFFICULTY) {
+                                found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
+                                let mut w_solution = solution.lock().expect("failed to lock mutex");
+                                *w_solution = (next_hash, nonce);
+                                return;
+                            }
+                            nonce += 1;
+                        }
                     }
-                }
-                let b = [
-                    hash.to_bytes().as_slice(),
-                    self.keypair.pubkey().to_bytes().as_slice(),
-                    nonce.to_be_bytes().as_slice(),
-                ]
-                .concat();
-                next_hash = hashv(&[&b]);
-                if next_hash.le(&DIFFICULTY) {
-                    found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
-                    let mut w_solution = solution.lock().expect("failed to lock mutex");
-                    *w_solution = (next_hash, nonce);
-                    return;
-                }
-                nonce += 1;
-            }
-        });
+                })
+            })
+            .collect();
+
+        for thread_handle in thread_handles {
+            thread_handle.join().unwrap();
+        }
+
+        // data.par_iter().for_each(|n| {
+        //     let mut next_hash: Hash;
+        //     let mut nonce: u64 = *n;
+        //     loop {
+        //         if nonce % 10_000 == 0 {
+        //             if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
+        //                 return;
+        //             }
+        //         }
+        //         let b = [
+        //             hash.to_bytes().as_slice(),
+        //             self.keypair.pubkey().to_bytes().as_slice(),
+        //             nonce.to_be_bytes().as_slice(),
+        //         ]
+        //         .concat();
+        //         next_hash = hashv(&[&b]);
+        //         if next_hash.le(&DIFFICULTY) {
+        //             found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
+        //             let mut w_solution = solution.lock().expect("failed to lock mutex");
+        //             *w_solution = (next_hash, nonce);
+        //             return;
+        //         }
+        //         nonce += 1;
+        //     }
+        // });
 
         let r_solution = solution.lock().expect("Failed to get lock");
         *r_solution
