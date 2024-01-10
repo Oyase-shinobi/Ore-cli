@@ -11,7 +11,10 @@ use anchor_client::{
     },
     Client, Cluster, Program,
 };
-use anchor_spl::token::{spl_token, TokenAccount};
+use anchor_spl::{
+    associated_token::get_associated_token_address,
+    token::{spl_token, TokenAccount},
+};
 use cached::proc_macro::cached;
 use clap::{command, Parser};
 use ore::{self, Metadata, Proof, BUS, BUS_COUNT, DIFFICULTY, EPOCH_DURATION, METADATA, PROOF};
@@ -153,6 +156,7 @@ impl<'a> MinerH<'a> {
                         program_id: ore::ID,
                         accounts: (ore::accounts::ResetEpoch {
                             signer: self.keypair.pubkey(),
+                            mint: self.mint,
                             metadata: metadata_pubkey(),
                             bus_0: bus_pubkey(0),
                             bus_1: bus_pubkey(1),
@@ -162,6 +166,16 @@ impl<'a> MinerH<'a> {
                             bus_5: bus_pubkey(5),
                             bus_6: bus_pubkey(6),
                             bus_7: bus_pubkey(7),
+                            bus_0_tokens: bus_token_pubkey(0, metadata.mint),
+                            bus_1_tokens: bus_token_pubkey(1, metadata.mint),
+                            bus_2_tokens: bus_token_pubkey(2, metadata.mint),
+                            bus_3_tokens: bus_token_pubkey(3, metadata.mint),
+                            bus_4_tokens: bus_token_pubkey(4, metadata.mint),
+                            bus_5_tokens: bus_token_pubkey(5, metadata.mint),
+                            bus_6_tokens: bus_token_pubkey(6, metadata.mint),
+                            bus_7_tokens: bus_token_pubkey(7, metadata.mint),
+                            associated_token_program: anchor_spl::associated_token::ID,
+                            token_program: anchor_spl::token::ID,
                         })
                         .to_account_metas(Some(false)),
                         data: ore::instruction::ResetEpoch {}.data(),
@@ -174,6 +188,7 @@ impl<'a> MinerH<'a> {
             }
 
             // Submit mine tx.
+            let bus_id = rng.gen_range(0..BUS_COUNT);
             let sig = self
                 .ore()
                 .request()
@@ -186,7 +201,8 @@ impl<'a> MinerH<'a> {
                         metadata: metadata_pubkey(),
                         mint: self.mint,
                         token_program: anchor_spl::token::ID,
-                        bus: bus_pubkey(rng.gen_range(0..BUS_COUNT)),
+                        bus: bus_pubkey(bus_id),
+                        bus_tokens: bus_token_pubkey(bus_id, self.mint),
                     })
                     .to_account_metas(Some(false)),
                     data: ore::instruction::Mine {
@@ -225,6 +241,7 @@ impl<'a> MinerH<'a> {
         (next_hash, nonce)
     }
 
+    // TODO Don't use rayon. Just spawn threads.
     fn find_next_hash_par(&self, hash: Hash) -> (Hash, u64) {
         let found_solution = Arc::new(AtomicBool::new(false));
         let solution = Arc::new(Mutex::<(Hash, u64)>::new((
@@ -333,15 +350,45 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
             bus_5: bus_pubkey(5),
             bus_6: bus_pubkey(6),
             bus_7: bus_pubkey(7),
+            metadata: metadata_pubkey(),
+            mint: mint.pubkey(),
         })
         .to_account_metas(Some(false)),
         data: ore::instruction::InitializeBusses {}.data(),
     };
-
     // Sign and send transaction.
     let mut transaction = Transaction::new_with_payer(&[ix_1, ix_2], Some(&signer.pubkey()));
     let recent_blockhash = client.get_latest_blockhash().await.unwrap();
     transaction.sign(&[&signer, &mint], recent_blockhash);
+    let result = client.send_and_confirm_transaction(&transaction).await;
+    match result {
+        Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
+        Err(e) => println!("Transaction failed: {:?}", e),
+    }
+
+    let tok_ixs: Vec<Instruction> = (0..8)
+        .map(|i| Instruction {
+            program_id: ore::ID,
+            accounts: (ore::accounts::InitializeBusTokens {
+                signer: signer.pubkey(),
+                system_program: system_program::ID,
+                bus: bus_pubkey(i),
+                bus_tokens: bus_token_pubkey(i, mint.pubkey()),
+                metadata: metadata_pubkey(),
+                mint: mint.pubkey(),
+                rent: sysvar::rent::ID,
+                token_program: anchor_spl::token::ID,
+                associated_token_program: anchor_spl::associated_token::ID,
+            })
+            .to_account_metas(Some(false)),
+            data: ore::instruction::InitializeBusTokens {}.data(),
+        })
+        .collect();
+
+    // Sign and send transaction.
+    let mut transaction = Transaction::new_with_payer(&tok_ixs, Some(&signer.pubkey()));
+    let recent_blockhash = client.get_latest_blockhash().await.unwrap();
+    transaction.sign(&[&signer], recent_blockhash);
     let result = client.send_and_confirm_transaction(&transaction).await;
     match result {
         Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
@@ -447,52 +494,8 @@ fn bus_pubkey(id: u8) -> Pubkey {
     Pubkey::find_program_address(&[BUS, &[id]], &ore::ID).0
 }
 
-// const PROGRAM_DATA: &str = "Program data: ";
-
-// Subscribe to streaming program logs.
-// runtime.spawn(async move {
-//     let sub_client = PubsubClient::new(cluster.ws_url())
-//         .await
-//         .expect("Failed to create pubsub client");
-
-//     let (mut notifications, _unsubscribe) = sub_client
-//         .logs_subscribe(
-//             solana_client::rpc_config::RpcTransactionLogsFilter::Mentions(vec![
-//                 ore::ID.to_string()
-//             ]),
-//             solana_client::rpc_config::RpcTransactionLogsConfig {
-//                 commitment: Some(CommitmentConfig::processed()),
-//             },
-//         )
-//         .await
-//         .expect("Failed to subscribe");
-
-//     while let Some(logs) = notifications.next().await {
-//         for log in &logs.value.logs[..] {
-//             if let Some(log) = log.strip_prefix(PROGRAM_DATA) {
-//                 if let Ok(borsh_bytes) = base64::engine::general_purpose::STANDARD.decode(log) {
-//                     let mut slice = &borsh_bytes[8..];
-//                     if let Ok(e) = MineEvent::deserialize(&mut slice) {
-//                         tx.send(e).expect("Failed to send event");
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// });
-
-// Sync local state with program logs.
-// runtime.spawn({
-//     // let flag = flag.clone();
-//     // let hash = hash.clone();
-//     // let difficulty = difficulty.clone();
-//     async move {
-//         while let Some(v) = rx.recv().await {
-//             // let mut w_hash = hash.write().expect("Failed to acquire write lock");
-//             // let mut w_difficulty = difficulty.write().expect("Failed to acquire write lock");
-//             // *w_hash = v.hash;
-//             // *w_difficulty = v.difficulty;
-//             // flag.store(true, Ordering::Relaxed);
-//         }
-//     }
-// });
+#[cached]
+fn bus_token_pubkey(id: u8, mint: Pubkey) -> Pubkey {
+    let bus = bus_pubkey(id);
+    get_associated_token_address(&bus, &mint)
+}
