@@ -31,7 +31,7 @@ use solana_sdk::{
 
 const NUM_THREADS: u64 = 6;
 
-struct MinerH<'a> {
+struct Miner<'a> {
     pub keypair: &'a Keypair,
     pub beneficiary: Pubkey,
     pub mint: Pubkey,
@@ -87,7 +87,6 @@ async fn main() {
 
     // Sync local state with on-chain data.
     let metadata = get_metadata(cluster.clone()).await;
-    let proof = get_proof(cluster.clone(), keypair.pubkey()).await;
     let mint = metadata.mint;
 
     // Initialize beneficiary token account.
@@ -101,13 +100,13 @@ async fn main() {
     };
 
     // Initalize miner
-    let miner = Arc::new(MinerH::new(cluster.clone(), &keypair, beneficiary, mint));
+    let miner = Arc::new(Miner::new(cluster.clone(), &keypair, beneficiary, mint));
 
     // Start mining.
-    miner.mine(cluster, proof.hash).await;
+    miner.mine(cluster).await;
 }
 
-impl<'a> MinerH<'a> {
+impl<'a> Miner<'a> {
     pub fn new(cluster: Cluster, keypair: &'a Keypair, beneficiary: Pubkey, mint: Pubkey) -> Self {
         Self {
             keypair,
@@ -131,13 +130,13 @@ impl<'a> MinerH<'a> {
             .expect("Failed to get Ore program")
     }
 
-    pub async fn mine(&self, cluster: Cluster, hash: Hash) {
-        let mut hash = hash;
+    pub async fn mine(&self, cluster: Cluster) {
         let proof_address = proof_pubkey(self.keypair.pubkey());
         let mut rng = rand::thread_rng();
         loop {
             // Find a valid hash.
-            let (next_hash, nonce) = self.find_next_hash_par(hash);
+            let proof = get_proof(cluster.clone(), self.keypair.pubkey()).await;
+            let (next_hash, nonce) = self.find_next_hash_par(proof.hash);
             println!(
                 "Found a valid hash {:?} nonce: {:?}",
                 next_hash.clone(),
@@ -204,6 +203,7 @@ impl<'a> MinerH<'a> {
                         token_program: anchor_spl::token::ID,
                         bus: bus_pubkey(bus_id),
                         bus_tokens: bus_token_pubkey(bus_id, self.mint),
+                        slot_hashes: sysvar::slot_hashes::ID,
                     })
                     .to_account_metas(Some(false)),
                     data: ore::instruction::Mine {
@@ -217,7 +217,6 @@ impl<'a> MinerH<'a> {
                 .await
                 .expect("Failed to submit transaction");
             println!("Sig: {}", sig);
-            hash = next_hash.clone();
         }
     }
 
@@ -225,13 +224,11 @@ impl<'a> MinerH<'a> {
         let mut next_hash: Hash;
         let mut nonce = 0u64;
         loop {
-            let b = [
+            next_hash = hashv(&[
                 hash.to_bytes().as_slice(),
                 self.keypair.pubkey().to_bytes().as_slice(),
                 nonce.to_be_bytes().as_slice(),
-            ]
-            .concat();
-            next_hash = hashv(&[&b]);
+            ]);
             if next_hash.le(&DIFFICULTY) {
                 break;
             } else {
@@ -242,7 +239,6 @@ impl<'a> MinerH<'a> {
         (next_hash, nonce)
     }
 
-    // TODO Don't use rayon. Just spawn threads.
     fn find_next_hash_par(&self, hash: Hash) -> (Hash, u64) {
         let found_solution = Arc::new(AtomicBool::new(false));
         let solution = Arc::new(Mutex::<(Hash, u64)>::new((
@@ -267,13 +263,11 @@ impl<'a> MinerH<'a> {
                                     return;
                                 }
                             }
-                            let b = [
+                            next_hash = hashv(&[
                                 hash.to_bytes().as_slice(),
                                 pubkey.to_bytes().as_slice(),
                                 nonce.to_be_bytes().as_slice(),
-                            ]
-                            .concat();
-                            next_hash = hashv(&[&b]);
+                            ]);
                             if next_hash.le(&DIFFICULTY) {
                                 found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let mut w_solution = solution.lock().expect("failed to lock mutex");
@@ -290,32 +284,6 @@ impl<'a> MinerH<'a> {
         for thread_handle in thread_handles {
             thread_handle.join().unwrap();
         }
-
-        // data.par_iter().for_each(|n| {
-        //     let mut next_hash: Hash;
-        //     let mut nonce: u64 = *n;
-        //     loop {
-        //         if nonce % 10_000 == 0 {
-        //             if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
-        //                 return;
-        //             }
-        //         }
-        //         let b = [
-        //             hash.to_bytes().as_slice(),
-        //             self.keypair.pubkey().to_bytes().as_slice(),
-        //             nonce.to_be_bytes().as_slice(),
-        //         ]
-        //         .concat();
-        //         next_hash = hashv(&[&b]);
-        //         if next_hash.le(&DIFFICULTY) {
-        //             found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
-        //             let mut w_solution = solution.lock().expect("failed to lock mutex");
-        //             *w_solution = (next_hash, nonce);
-        //             return;
-        //         }
-        //         nonce += 1;
-        //     }
-        // });
 
         let r_solution = solution.lock().expect("Failed to get lock");
         *r_solution
