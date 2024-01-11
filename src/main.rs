@@ -17,7 +17,7 @@ use anchor_spl::{
 };
 use cached::proc_macro::cached;
 use clap::{command, Parser};
-use ore::{self, Metadata, Proof, BUS, BUS_COUNT, DIFFICULTY, EPOCH_DURATION, METADATA, PROOF};
+use ore::{self, Metadata, Proof, BUS, BUS_COUNT, EPOCH_DURATION, METADATA, PROOF};
 use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -135,8 +135,9 @@ impl<'a> Miner<'a> {
         let mut rng = rand::thread_rng();
         loop {
             // Find a valid hash.
+            let metadata = get_metadata(cluster.clone()).await;
             let proof = get_proof(cluster.clone(), self.keypair.pubkey()).await;
-            let (next_hash, nonce) = self.find_next_hash_par(proof.hash);
+            let (next_hash, nonce) = self.find_next_hash_par(proof.hash, metadata.difficulty);
             println!(
                 "Found a valid hash {:?} nonce: {:?}",
                 next_hash.clone(),
@@ -220,7 +221,7 @@ impl<'a> Miner<'a> {
         }
     }
 
-    fn _find_next_hash(&self, hash: Hash) -> (Hash, u64) {
+    fn _find_next_hash(&self, hash: Hash, difficulty: Hash) -> (Hash, u64) {
         let mut next_hash: Hash;
         let mut nonce = 0u64;
         loop {
@@ -229,7 +230,7 @@ impl<'a> Miner<'a> {
                 self.keypair.pubkey().to_bytes().as_slice(),
                 nonce.to_be_bytes().as_slice(),
             ]);
-            if next_hash.le(&DIFFICULTY) {
+            if next_hash.le(&difficulty) {
                 break;
             } else {
                 println!("Invalid hash: {} Nonce: {:?}", next_hash.to_string(), nonce);
@@ -239,7 +240,7 @@ impl<'a> Miner<'a> {
         (next_hash, nonce)
     }
 
-    fn find_next_hash_par(&self, hash: Hash) -> (Hash, u64) {
+    fn find_next_hash_par(&self, hash: Hash, difficulty: Hash) -> (Hash, u64) {
         let found_solution = Arc::new(AtomicBool::new(false));
         let solution = Arc::new(Mutex::<(Hash, u64)>::new((
             Hash::new_from_array([0; 32]),
@@ -268,7 +269,7 @@ impl<'a> Miner<'a> {
                                 pubkey.to_bytes().as_slice(),
                                 nonce.to_be_bytes().as_slice(),
                             ]);
-                            if next_hash.le(&DIFFICULTY) {
+                            if next_hash.le(&difficulty) {
                                 found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let mut w_solution = solution.lock().expect("failed to lock mutex");
                                 *w_solution = (next_hash, nonce);
