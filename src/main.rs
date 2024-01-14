@@ -34,7 +34,6 @@ const NUM_THREADS: u64 = 6;
 struct Miner<'a> {
     pub keypair: &'a Keypair,
     pub beneficiary: Pubkey,
-    pub mint: Pubkey,
     pub cluster: Cluster,
 }
 
@@ -85,33 +84,26 @@ async fn main() {
     // Initialize miner account, if needed.
     initialize_miner_account(cluster.clone(), args.identity.clone()).await;
 
-    // Sync local state with on-chain data.
-    let metadata = get_metadata(cluster.clone()).await;
-    let mint = metadata.mint;
-
     // Initialize beneficiary token account.
     let beneficiary = match args.beneficiary {
         Some(beneficiary) => {
             Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
         }
-        None => {
-            initialize_token_account(cluster.clone(), args.identity, keypair.pubkey(), mint).await
-        }
+        None => initialize_token_account(cluster.clone(), args.identity, keypair.pubkey()).await,
     };
 
     // Initalize miner
-    let miner = Arc::new(Miner::new(cluster.clone(), &keypair, beneficiary, mint));
+    let miner = Arc::new(Miner::new(cluster.clone(), &keypair, beneficiary));
 
     // Start mining.
     miner.mine(cluster).await;
 }
 
 impl<'a> Miner<'a> {
-    pub fn new(cluster: Cluster, keypair: &'a Keypair, beneficiary: Pubkey, mint: Pubkey) -> Self {
+    pub fn new(cluster: Cluster, keypair: &'a Keypair, beneficiary: Pubkey) -> Self {
         Self {
             keypair,
             beneficiary,
-            mint,
             cluster,
         }
     }
@@ -157,7 +149,7 @@ impl<'a> Miner<'a> {
                         program_id: ore::ID,
                         accounts: (ore::accounts::ResetEpoch {
                             signer: self.keypair.pubkey(),
-                            mint: self.mint,
+                            mint: ore::TOKEN_MINT_ADDRESS,
                             metadata: metadata_pubkey(),
                             bus_0: bus_pubkey(0),
                             bus_1: bus_pubkey(1),
@@ -167,14 +159,14 @@ impl<'a> Miner<'a> {
                             bus_5: bus_pubkey(5),
                             bus_6: bus_pubkey(6),
                             bus_7: bus_pubkey(7),
-                            bus_0_tokens: bus_token_pubkey(0, metadata.mint),
-                            bus_1_tokens: bus_token_pubkey(1, metadata.mint),
-                            bus_2_tokens: bus_token_pubkey(2, metadata.mint),
-                            bus_3_tokens: bus_token_pubkey(3, metadata.mint),
-                            bus_4_tokens: bus_token_pubkey(4, metadata.mint),
-                            bus_5_tokens: bus_token_pubkey(5, metadata.mint),
-                            bus_6_tokens: bus_token_pubkey(6, metadata.mint),
-                            bus_7_tokens: bus_token_pubkey(7, metadata.mint),
+                            bus_0_tokens: bus_token_pubkey(0),
+                            bus_1_tokens: bus_token_pubkey(1),
+                            bus_2_tokens: bus_token_pubkey(2),
+                            bus_3_tokens: bus_token_pubkey(3),
+                            bus_4_tokens: bus_token_pubkey(4),
+                            bus_5_tokens: bus_token_pubkey(5),
+                            bus_6_tokens: bus_token_pubkey(6),
+                            bus_7_tokens: bus_token_pubkey(7),
                             associated_token_program: anchor_spl::associated_token::ID,
                             token_program: anchor_spl::token::ID,
                         })
@@ -188,6 +180,7 @@ impl<'a> Miner<'a> {
                 println!("Sig: {}", sig);
             }
 
+            // TODO Retry if bus has insufficient funds.
             // Submit mine tx.
             let bus_id = rng.gen_range(0..BUS_COUNT);
             let sig = self
@@ -200,10 +193,10 @@ impl<'a> Miner<'a> {
                         beneficiary: self.beneficiary,
                         proof: proof_address,
                         metadata: metadata_pubkey(),
-                        mint: self.mint,
+                        mint: ore::TOKEN_MINT_ADDRESS,
                         token_program: anchor_spl::token::ID,
                         bus: bus_pubkey(bus_id),
-                        bus_tokens: bus_token_pubkey(bus_id, self.mint),
+                        bus_tokens: bus_token_pubkey(bus_id),
                         slot_hashes: sysvar::slot_hashes::ID,
                     })
                     .to_account_metas(Some(false)),
@@ -331,7 +324,7 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
     }
 
     // Build instructions.
-    let mint = Keypair::new();
+    let mint = read_keypair_file("/home/ubuntu/.config/solana/ore-mint.json").unwrap();
     let signer = read_keypair_file(keypair_filepath).unwrap();
     let ix_1 = Instruction {
         program_id: ore::ID,
@@ -382,7 +375,7 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
                 signer: signer.pubkey(),
                 system_program: system_program::ID,
                 bus: bus_pubkey(i),
-                bus_tokens: bus_token_pubkey(i, mint.pubkey()),
+                bus_tokens: bus_token_pubkey(i),
                 metadata: metadata_pubkey(),
                 mint: mint.pubkey(),
                 rent: sysvar::rent::ID,
@@ -418,13 +411,13 @@ async fn initialize_miner_account(cluster: Cluster, keypair_filepath: String) {
     // Build instructions.
     let ix = Instruction {
         program_id: ore::ID,
-        accounts: (ore::accounts::Register {
+        accounts: (ore::accounts::InitializeProof {
             signer: signer.pubkey(),
             proof: proof_address,
             system_program: system_program::ID,
         })
         .to_account_metas(Some(false)),
-        data: ore::instruction::Register {}.data(),
+        data: ore::instruction::InitializeProof {}.data(),
     };
 
     // Sign and send transaction.
@@ -442,7 +435,6 @@ async fn initialize_token_account(
     cluster: Cluster,
     keypair_filepath: String,
     authority: Pubkey,
-    mint: Pubkey,
 ) -> Pubkey {
     // Initialize client.
     let signer = read_keypair_file(keypair_filepath).unwrap();
@@ -466,7 +458,7 @@ async fn initialize_token_account(
     let initialize_account_instruction = spl_token::instruction::initialize_account(
         &spl_token::id(),
         &token_account_pubkey,
-        &mint,
+        &ore::TOKEN_MINT_ADDRESS,
         &authority,
     )
     .unwrap();
@@ -504,7 +496,7 @@ fn bus_pubkey(id: u8) -> Pubkey {
 }
 
 #[cached]
-fn bus_token_pubkey(id: u8, mint: Pubkey) -> Pubkey {
+fn bus_token_pubkey(id: u8) -> Pubkey {
     let bus = bus_pubkey(id);
-    get_associated_token_address(&bus, &mint)
+    get_associated_token_address(&bus, &ore::TOKEN_MINT_ADDRESS)
 }
