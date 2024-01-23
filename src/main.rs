@@ -229,7 +229,6 @@ impl<'a> Miner<'a> {
                     accounts: (ore::accounts::Mine {
                         signer: self.keypair.pubkey(),
                         bus: bus_pubkey(bus_id),
-                        mint: ore::TOKEN_MINT_ADDRESS,
                         proof: proof_address,
                         treasury: treasury_pubkey(),
                         token_program: anchor_spl::token::ID,
@@ -463,35 +462,6 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
         Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
         Err(e) => println!("Transaction failed: {:?}", e),
     }
-
-    // let tok_ixs: Vec<Instruction> = (0..8)
-    //     .map(|i| Instruction {
-    //         program_id: ore::ID,
-    //         accounts: (ore::accounts::InitializeBusTokens {
-    //             signer: signer.pubkey(),
-    //             system_program: system_program::ID,
-    //             bus: bus_pubkey(i),
-    //             bus_tokens: bus_token_pubkey(i),
-    //             treasury: treasury_pubkey(),
-    //             mint: mint.pubkey(),
-    //             rent: sysvar::rent::ID,
-    //             token_program: anchor_spl::token::ID,
-    //             associated_token_program: anchor_spl::associated_token::ID,
-    //         })
-    //         .to_account_metas(Some(false)),
-    //         data: ore::instruction::InitializeBusTokens {}.data(),
-    //     })
-    //     .collect();
-
-    // Sign and send transaction.
-    // let mut transaction = Transaction::new_with_payer(&tok_ixs, Some(&signer.pubkey()));
-    // let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-    // transaction.sign(&[&signer], recent_blockhash);
-    // let result = client.send_and_confirm_transaction(&transaction).await;
-    // match result {
-    //     Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
-    //     Err(e) => println!("Transaction failed: {:?}", e),
-    // }
 }
 
 async fn initialize_proof_account(cluster: Cluster, keypair_filepath: String) {
