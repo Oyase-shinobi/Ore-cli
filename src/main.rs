@@ -16,24 +16,25 @@ use anchor_spl::{
     token::{spl_token, TokenAccount},
 };
 use cached::proc_macro::cached;
-use clap::{command, Parser};
-use ore::{self, Metadata, Proof, BUS, BUS_COUNT, EPOCH_DURATION, METADATA, PROOF};
-use rand::Rng;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use clap::{command, Parser, Subcommand};
+use ore::{self, Proof, Treasury, BUS, BUS_COUNT, EPOCH_DURATION, PROOF, TREASURY};
+use solana_client::{client_error::ClientErrorKind, nonblocking::rpc_client::RpcClient};
 use solana_sdk::{
     clock::Clock,
     commitment_config::CommitmentConfig,
+    compute_budget::ComputeBudgetInstruction,
     hash::{hashv, Hash},
     signature::{read_keypair_file, Keypair, Signer},
     system_instruction,
     transaction::Transaction,
 };
 
+// TODO Request only compute units that are needed
+
 const NUM_THREADS: u64 = 6;
 
 struct Miner<'a> {
     pub keypair: &'a Keypair,
-    pub beneficiary: Pubkey,
     pub cluster: Cluster,
 }
 
@@ -46,13 +47,6 @@ struct Args {
         help = "Identity keypair to sign transactions"
     )]
     identity: String,
-
-    #[arg(
-        long,
-        value_name = "TOKEN_ACCOUNT_ADDRESS",
-        help = "Token account to receive mining rewards."
-    )]
-    beneficiary: Option<String>,
 
     #[arg(
         long,
@@ -69,43 +63,81 @@ struct Args {
         default_value = "wss://api.mainnet-beta.solana.com/"
     )]
     rpc_ws_url: String,
+
+    // Subcommands
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    #[command(about = "Use your local computer to mine Ore")]
+    Mine(Mine),
+
+    #[command(about = "Claim available mining rewards")]
+    Claim(Claim),
+}
+
+// Arguments specific to the foo subcommand
+#[derive(Parser, Debug)]
+struct Mine {
+    // TODO Thread count
+}
+
+// Arguments specific to the bar subcommand
+#[derive(Parser, Debug)]
+struct Claim {
+    #[arg(
+        long,
+        value_name = "AMOUNT",
+        help = "The amount of rewards to claim. Defaults to max."
+    )]
+    amount: Option<u64>,
+
+    #[arg(
+        long,
+        value_name = "TOKEN_ACCOUNT_ADDRESS",
+        help = "Token account to receive mining rewards."
+    )]
+    beneficiary: Option<String>,
 }
 
 #[tokio::main]
 async fn main() {
-    // Initialize runtime.
+    // Initialize miner.
     let args = Args::parse();
     let cluster: Cluster = Cluster::Custom(args.rpc_url, args.rpc_ws_url);
     let keypair = read_keypair_file(args.identity.clone()).unwrap();
+    let miner = Arc::new(Miner::new(cluster.clone(), &keypair));
 
     // Initialize Ore program, if needed.
     initialize_program(cluster.clone(), args.identity.clone()).await;
 
-    // Initialize miner account, if needed.
-    initialize_miner_account(cluster.clone(), args.identity.clone()).await;
+    // Initialize proof account, if needed.
+    initialize_proof_account(cluster.clone(), args.identity.clone()).await;
 
-    // Initialize beneficiary token account.
-    let beneficiary = match args.beneficiary {
-        Some(beneficiary) => {
-            Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
+    // Execute user command.
+    match args.command {
+        Commands::Mine(_cmd) => {
+            miner.mine().await;
         }
-        None => initialize_token_account(cluster.clone(), args.identity, keypair.pubkey()).await,
-    };
-
-    // Initalize miner
-    let miner = Arc::new(Miner::new(cluster.clone(), &keypair, beneficiary));
-
-    // Start mining.
-    miner.mine(cluster).await;
+        Commands::Claim(cmd) => {
+            let beneficiary = match cmd.beneficiary {
+                Some(beneficiary) => {
+                    Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
+                }
+                None => {
+                    initialize_token_account(cluster.clone(), args.identity, keypair.pubkey()).await
+                }
+            };
+            miner.claim(cluster, beneficiary).await;
+        }
+    }
 }
 
 impl<'a> Miner<'a> {
-    pub fn new(cluster: Cluster, keypair: &'a Keypair, beneficiary: Pubkey) -> Self {
-        Self {
-            keypair,
-            beneficiary,
-            cluster,
-        }
+    pub fn new(cluster: Cluster, keypair: &'a Keypair) -> Self {
+        Self { keypair, cluster }
     }
 
     pub fn client(&self) -> Client<&'a Keypair> {
@@ -122,81 +154,85 @@ impl<'a> Miner<'a> {
             .expect("Failed to get Ore program")
     }
 
-    pub async fn mine(&self, cluster: Cluster) {
+    pub async fn mine(&self) {
         let proof_address = proof_pubkey(self.keypair.pubkey());
-        let mut rng = rand::thread_rng();
         loop {
             // Find a valid hash.
-            let metadata = get_metadata(cluster.clone()).await;
-            let proof = get_proof(cluster.clone(), self.keypair.pubkey()).await;
-            let (next_hash, nonce) = self.find_next_hash_par(proof.hash, metadata.difficulty);
+            let treasury = get_treasury(self.cluster.clone()).await;
+            let proof = get_proof(self.cluster.clone(), self.keypair.pubkey()).await;
+            let (next_hash, nonce) = self.find_next_hash_par(proof.hash, treasury.difficulty);
             println!(
                 "Found a valid hash {:?} nonce: {:?}",
                 next_hash.clone(),
                 nonce
             );
 
-            // Check if epoch needs to be reset
-            let metadata = get_metadata(cluster.clone()).await;
-            let clock = get_clock_account(cluster.clone()).await;
-            let epoch_end_at = metadata.epoch_start_at.saturating_add(EPOCH_DURATION);
-            if clock.unix_timestamp.ge(&epoch_end_at) {
-                // Submit restart epoch tx.
-                let sig = self
-                    .ore()
-                    .request()
-                    .instruction(Instruction {
-                        program_id: ore::ID,
-                        accounts: (ore::accounts::ResetEpoch {
-                            signer: self.keypair.pubkey(),
-                            mint: ore::TOKEN_MINT_ADDRESS,
-                            metadata: metadata_pubkey(),
-                            bus_0: bus_pubkey(0),
-                            bus_1: bus_pubkey(1),
-                            bus_2: bus_pubkey(2),
-                            bus_3: bus_pubkey(3),
-                            bus_4: bus_pubkey(4),
-                            bus_5: bus_pubkey(5),
-                            bus_6: bus_pubkey(6),
-                            bus_7: bus_pubkey(7),
-                            bus_0_tokens: bus_token_pubkey(0),
-                            bus_1_tokens: bus_token_pubkey(1),
-                            bus_2_tokens: bus_token_pubkey(2),
-                            bus_3_tokens: bus_token_pubkey(3),
-                            bus_4_tokens: bus_token_pubkey(4),
-                            bus_5_tokens: bus_token_pubkey(5),
-                            bus_6_tokens: bus_token_pubkey(6),
-                            bus_7_tokens: bus_token_pubkey(7),
-                            associated_token_program: anchor_spl::associated_token::ID,
-                            token_program: anchor_spl::token::ID,
-                        })
-                        .to_account_metas(Some(false)),
-                        data: ore::instruction::ResetEpoch {}.data(),
-                    })
-                    .signer(self.keypair)
-                    .send()
-                    .await
-                    .expect("Failed to submit transaction");
-                println!("Sig: {}", sig);
-            }
-
             // TODO Retry if bus has insufficient funds.
             // Submit mine tx.
-            let bus_id = rng.gen_range(0..BUS_COUNT);
-            let sig = self
-                .ore()
-                .request()
-                .instruction(Instruction {
+            let client = RpcClient::new_with_commitment(
+                self.cluster.url().to_string(),
+                CommitmentConfig::processed(),
+            );
+            let mut bus_id = 0;
+            let mut invalid_busses: Vec<u8> = vec![];
+            loop {
+                // Find a valid bus.
+                if invalid_busses.len().eq(&(BUS_COUNT as usize)) {
+                    // All busses are drained. Wait until next epoch.
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                }
+                if invalid_busses.contains(&bus_id) {
+                    bus_id += 1;
+                }
+
+                // Check if epoch needs to be reset
+                let treasury = get_treasury(self.cluster.clone()).await;
+                let clock = get_clock_account(self.cluster.clone()).await;
+                let epoch_end_at = treasury.epoch_start_at.saturating_add(EPOCH_DURATION);
+                if clock.unix_timestamp.ge(&epoch_end_at) {
+                    // Submit restart epoch tx.
+                    let sig = self
+                        .ore()
+                        .request()
+                        .instruction(Instruction {
+                            program_id: ore::ID,
+                            accounts: (ore::accounts::ResetEpoch {
+                                signer: self.keypair.pubkey(),
+                                bus_0: bus_pubkey(0),
+                                bus_1: bus_pubkey(1),
+                                bus_2: bus_pubkey(2),
+                                bus_3: bus_pubkey(3),
+                                bus_4: bus_pubkey(4),
+                                bus_5: bus_pubkey(5),
+                                bus_6: bus_pubkey(6),
+                                bus_7: bus_pubkey(7),
+                                mint: ore::TOKEN_MINT_ADDRESS,
+                                treasury: treasury_pubkey(),
+                                treasury_tokens: treasury_tokens_pubkey(),
+                                token_program: anchor_spl::token::ID,
+                            })
+                            .to_account_metas(Some(false)),
+                            data: ore::instruction::ResetEpoch {}.data(),
+                        })
+                        .signer(self.keypair)
+                        .send()
+                        .await
+                        .expect("Failed to submit transaction");
+                    println!("Sig: {}", sig);
+                }
+
+                // Submit request.
+                const COMPUTE_BUDGET: u32 = 11_500; // Determined from on local testing
+                let ix_cu_budget = ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET);
+                let ix_mine = Instruction {
                     program_id: ore::ID,
                     accounts: (ore::accounts::Mine {
                         signer: self.keypair.pubkey(),
-                        beneficiary: self.beneficiary,
-                        proof: proof_address,
-                        metadata: metadata_pubkey(),
-                        mint: ore::TOKEN_MINT_ADDRESS,
-                        token_program: anchor_spl::token::ID,
                         bus: bus_pubkey(bus_id),
-                        bus_tokens: bus_token_pubkey(bus_id),
+                        mint: ore::TOKEN_MINT_ADDRESS,
+                        proof: proof_address,
+                        treasury: treasury_pubkey(),
+                        token_program: anchor_spl::token::ID,
                         slot_hashes: sysvar::slot_hashes::ID,
                     })
                     .to_account_metas(Some(false)),
@@ -205,13 +241,71 @@ impl<'a> Miner<'a> {
                         nonce,
                     }
                     .data(),
-                })
-                .signer(self.keypair)
-                .send()
-                .await
-                .expect("Failed to submit transaction");
-            println!("Sig: {}", sig);
+                };
+                let mut tx = Transaction::new_with_payer(
+                    &vec![ix_cu_budget, ix_mine],
+                    Some(&self.keypair.pubkey()),
+                );
+                let recent_blockhash = client.get_latest_blockhash().await.unwrap();
+                tx.sign(&[&self.keypair], recent_blockhash);
+                let result = client.send_and_confirm_transaction(&tx).await;
+                match result {
+                    Ok(sig) => {
+                        println!("Sig: {}", sig);
+                        break;
+                    }
+                    Err(err) => {
+                        match err.kind {
+                            ClientErrorKind::RpcError(err) => {
+                                // TODO Why is BusInsufficientFunds an RpcError but EpochNeedsReset is a TransactionError ?
+                                //      Unhandled error Error { request: None, kind: TransactionError(InstructionError(0, Custom(6003))) }
+                                //      thread 'main' panicked at 'Failed to submit transaction: SolanaClientError(Error { request: None, kind: TransactionError(InstructionError(0, Custom(6000))) })', src/main.rs:193:26
+                                if err.to_string().contains("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1775") {
+                                    // Bus has no remaining funds. Use a different one.
+                                    println!("Bus {} is drained. Finding another one.", bus_id);
+                                    invalid_busses.push(bus_id);
+                                } else {
+                                    log::error!("{:?}", err.to_string());
+                                }
+                            }
+                            _ => {
+                                println!("Unhandled error {:?}", err);
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    async fn claim(&self, cluster: Cluster, beneficiary: Pubkey) {
+        let pubkey = self.keypair.pubkey();
+        let proof = get_proof(cluster, pubkey).await;
+        let sig = self
+            .ore()
+            .request()
+            .instruction(Instruction {
+                program_id: ore::ID,
+                accounts: (ore::accounts::Claim {
+                    signer: pubkey,
+                    beneficiary,
+                    mint: ore::TOKEN_MINT_ADDRESS,
+                    proof: proof_pubkey(pubkey),
+                    treasury: treasury_pubkey(),
+                    treasury_tokens: treasury_tokens_pubkey(),
+                    token_program: anchor_spl::token::ID,
+                })
+                .to_account_metas(Some(false)),
+                data: ore::instruction::Claim {
+                    amount: proof.claimable_rewards,
+                }
+                .data(),
+            })
+            .signer(self.keypair)
+            .send()
+            .await
+            .expect("Failed to submit transaction");
+        println!("Sig: {}", sig);
     }
 
     fn _find_next_hash(&self, hash: Hash, difficulty: Hash) -> (Hash, u64) {
@@ -284,14 +378,14 @@ impl<'a> Miner<'a> {
     }
 }
 
-pub async fn get_metadata(cluster: Cluster) -> Metadata {
+pub async fn get_treasury(cluster: Cluster) -> Treasury {
     let client =
         RpcClient::new_with_commitment(cluster.url().to_string(), CommitmentConfig::processed());
     let data = client
-        .get_account_data(&metadata_pubkey())
+        .get_account_data(&treasury_pubkey())
         .await
-        .expect("Failed to get metadata account");
-    Metadata::deserialize(&mut &data.as_slice()[8..]).expect("Failed to parse metadata account")
+        .expect("Failed to get treasury account");
+    Treasury::deserialize(&mut &data.as_slice()[8..]).expect("Failed to parse treasury account")
 }
 
 pub async fn get_proof(cluster: Cluster, authority: Pubkey) -> Proof {
@@ -319,7 +413,7 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
     // Return early if program is initialized
     let client =
         RpcClient::new_with_commitment(cluster.url().to_string(), CommitmentConfig::processed());
-    if client.get_account(&metadata_pubkey()).await.is_ok() {
+    if client.get_account(&treasury_pubkey()).await.is_ok() {
         return;
     }
 
@@ -328,16 +422,18 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
     let signer = read_keypair_file(keypair_filepath).unwrap();
     let ix_1 = Instruction {
         program_id: ore::ID,
-        accounts: (ore::accounts::InitializeMetadata {
+        accounts: (ore::accounts::InitializeTreasury {
             signer: signer.pubkey(),
-            metadata: metadata_pubkey(),
+            treasury: treasury_pubkey(),
+            treasury_tokens: treasury_tokens_pubkey(),
             mint: mint.pubkey(),
             rent: sysvar::rent::ID,
             system_program: system_program::ID,
             token_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
         })
         .to_account_metas(Some(false)),
-        data: ore::instruction::InitializeMetadata {}.data(),
+        data: ore::instruction::InitializeTreasury {}.data(),
     };
     let ix_2 = Instruction {
         program_id: ore::ID,
@@ -352,7 +448,7 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
             bus_5: bus_pubkey(5),
             bus_6: bus_pubkey(6),
             bus_7: bus_pubkey(7),
-            metadata: metadata_pubkey(),
+            treasury: treasury_pubkey(),
             mint: mint.pubkey(),
         })
         .to_account_metas(Some(false)),
@@ -368,37 +464,37 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
         Err(e) => println!("Transaction failed: {:?}", e),
     }
 
-    let tok_ixs: Vec<Instruction> = (0..8)
-        .map(|i| Instruction {
-            program_id: ore::ID,
-            accounts: (ore::accounts::InitializeBusTokens {
-                signer: signer.pubkey(),
-                system_program: system_program::ID,
-                bus: bus_pubkey(i),
-                bus_tokens: bus_token_pubkey(i),
-                metadata: metadata_pubkey(),
-                mint: mint.pubkey(),
-                rent: sysvar::rent::ID,
-                token_program: anchor_spl::token::ID,
-                associated_token_program: anchor_spl::associated_token::ID,
-            })
-            .to_account_metas(Some(false)),
-            data: ore::instruction::InitializeBusTokens {}.data(),
-        })
-        .collect();
+    // let tok_ixs: Vec<Instruction> = (0..8)
+    //     .map(|i| Instruction {
+    //         program_id: ore::ID,
+    //         accounts: (ore::accounts::InitializeBusTokens {
+    //             signer: signer.pubkey(),
+    //             system_program: system_program::ID,
+    //             bus: bus_pubkey(i),
+    //             bus_tokens: bus_token_pubkey(i),
+    //             treasury: treasury_pubkey(),
+    //             mint: mint.pubkey(),
+    //             rent: sysvar::rent::ID,
+    //             token_program: anchor_spl::token::ID,
+    //             associated_token_program: anchor_spl::associated_token::ID,
+    //         })
+    //         .to_account_metas(Some(false)),
+    //         data: ore::instruction::InitializeBusTokens {}.data(),
+    //     })
+    //     .collect();
 
     // Sign and send transaction.
-    let mut transaction = Transaction::new_with_payer(&tok_ixs, Some(&signer.pubkey()));
-    let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-    transaction.sign(&[&signer], recent_blockhash);
-    let result = client.send_and_confirm_transaction(&transaction).await;
-    match result {
-        Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
-        Err(e) => println!("Transaction failed: {:?}", e),
-    }
+    // let mut transaction = Transaction::new_with_payer(&tok_ixs, Some(&signer.pubkey()));
+    // let recent_blockhash = client.get_latest_blockhash().await.unwrap();
+    // transaction.sign(&[&signer], recent_blockhash);
+    // let result = client.send_and_confirm_transaction(&transaction).await;
+    // match result {
+    //     Ok(signature) => println!("Transaction successful with signature: {:?}", signature),
+    //     Err(e) => println!("Transaction failed: {:?}", e),
+    // }
 }
 
-async fn initialize_miner_account(cluster: Cluster, keypair_filepath: String) {
+async fn initialize_proof_account(cluster: Cluster, keypair_filepath: String) {
     // Return early if program is initialized
     let signer = read_keypair_file(keypair_filepath).unwrap();
     let proof_address = proof_pubkey(signer.pubkey());
@@ -481,8 +577,8 @@ async fn initialize_token_account(
 }
 
 #[cached]
-fn metadata_pubkey() -> Pubkey {
-    Pubkey::find_program_address(&[METADATA], &ore::ID).0
+fn treasury_pubkey() -> Pubkey {
+    Pubkey::find_program_address(&[TREASURY], &ore::ID).0
 }
 
 #[cached]
@@ -496,7 +592,6 @@ fn bus_pubkey(id: u8) -> Pubkey {
 }
 
 #[cached]
-fn bus_token_pubkey(id: u8) -> Pubkey {
-    let bus = bus_pubkey(id);
-    get_associated_token_address(&bus, &ore::TOKEN_MINT_ADDRESS)
+fn treasury_tokens_pubkey() -> Pubkey {
+    get_associated_token_address(&treasury_pubkey(), &ore::TOKEN_MINT_ADDRESS)
 }

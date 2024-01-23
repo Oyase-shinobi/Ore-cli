@@ -2563,7 +2563,6 @@ dependencies = [
  "futures",
  "log",
  "ore",
- "rand 0.8.5",
  "sha256",
  "solana-client",
  "solana-sdk",
