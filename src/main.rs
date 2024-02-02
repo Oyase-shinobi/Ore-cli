@@ -23,7 +23,7 @@ use solana_sdk::{
     clock::Clock,
     commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
-    hash::{hashv, Hash},
+    keccak::{hashv, Hash},
     signature::{read_keypair_file, Keypair, Signer},
     system_instruction,
     transaction::Transaction,
@@ -417,7 +417,7 @@ async fn initialize_program(cluster: Cluster, keypair_filepath: String) {
     }
 
     // Build instructions.
-    let mint = read_keypair_file("/home/ubuntu/.config/solana/ore-mint.json").unwrap();
+    let mint = read_keypair_file("/home/ubuntu/.config/solana/ore-mint-2.json").unwrap();
     let signer = read_keypair_file(keypair_filepath).unwrap();
     let ix_1 = Instruction {
         program_id: ore::ID,
