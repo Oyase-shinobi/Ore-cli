@@ -2355,8 +2355,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
-name = "ore"
+name = "ore-miner"
 version = "0.1.0"
+dependencies = [
+ "bincode",
+ "bs64",
+ "cached",
+ "clap 4.4.12",
+ "futures",
+ "log",
+ "ore-program",
+ "solana-client",
+ "solana-program",
+ "solana-sdk",
+ "spl-associated-token-account",
+ "spl-token",
+ "tokio",
+]
+
+[[package]]
+name = "ore-program"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0541994aaa5974100876b11ab4eaf52632d88fd1e5e686747792525b07bace05"
 dependencies = [
  "bs58 0.5.0",
  "bytemuck",
@@ -2367,25 +2388,6 @@ dependencies = [
  "spl-token",
  "static_assertions",
  "thiserror",
-]
-
-[[package]]
-name = "ore-miner"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "bs64",
- "cached",
- "clap 4.4.12",
- "futures",
- "log",
- "ore",
- "solana-client",
- "solana-program",
- "solana-sdk",
- "spl-associated-token-account",
- "spl-token",
- "tokio",
 ]
 
 [[package]]

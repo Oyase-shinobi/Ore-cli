@@ -184,7 +184,7 @@ impl<'a> Miner<'a> {
                 }
 
                 // Submit request.
-                const COMPUTE_BUDGET: u32 = 2_700; // Determined from on local testing
+                const COMPUTE_BUDGET: u32 = 3000; // Determined from on local testing
                 let ix_cu_budget = ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET);
                 let ix_mine = ore::instruction::mine(
                     self.keypair.pubkey(),
