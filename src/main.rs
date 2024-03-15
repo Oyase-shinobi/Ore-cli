@@ -259,8 +259,8 @@ impl<'a> Miner<'a> {
                 // Reset if epoch has ended
                 let treasury = get_treasury(self.cluster.clone()).await;
                 let clock = get_clock_account(self.cluster.clone()).await;
-                let epoch_end_at = treasury.epoch_start_at.saturating_add(EPOCH_DURATION);
-                if clock.unix_timestamp.ge(&epoch_end_at) {
+                let threshold = treasury.last_reset_at.saturating_add(EPOCH_DURATION);
+                if clock.unix_timestamp.ge(&threshold) {
                     let reset_ix = ore::instruction::reset(self.signer.pubkey());
                     let tx = Transaction::new_signed_with_payer(
                         &[reset_ix],
@@ -357,7 +357,7 @@ impl<'a> Miner<'a> {
             next_hash = hashv(&[
                 hash.to_bytes().as_slice(),
                 self.signer.pubkey().to_bytes().as_slice(),
-                nonce.to_be_bytes().as_slice(),
+                nonce.to_le_bytes().as_slice(),
             ]);
             if next_hash.le(&difficulty) {
                 break;
@@ -396,7 +396,7 @@ impl<'a> Miner<'a> {
                             next_hash = hashv(&[
                                 hash.to_bytes().as_slice(),
                                 pubkey.to_bytes().as_slice(),
-                                nonce.to_be_bytes().as_slice(),
+                                nonce.to_le_bytes().as_slice(),
                             ]);
                             if next_hash.le(&difficulty) {
                                 found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -433,8 +433,7 @@ impl<'a> Miner<'a> {
         let mut tx = Transaction::new_with_payer(&[ix], Some(&self.signer.pubkey()));
         let recent_blockhash = client.get_latest_blockhash().await.unwrap();
         tx.sign(&[&self.signer], recent_blockhash);
-        let result = client.send_and_confirm_transaction(&tx).await;
-        match result {
+        match client.send_and_confirm_transaction(&tx).await {
             Ok(sig) => println!("Transaction successful with signature: {:?}", sig),
             Err(e) => println!("Transaction failed: {:?}", e),
         }
