@@ -58,6 +58,9 @@ enum Commands {
     #[command(about = "Claim available mining rewards")]
     Claim(Claim),
 
+    #[command(about = "Fetch your balance of unclaimed mining rewards")]
+    Rewards(Rewards),
+
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
     Initialize(Initialize),
@@ -74,9 +77,19 @@ enum Commands {
 #[derive(Parser, Debug)]
 struct Balance {
     #[arg(
-        long,
+        // long,
         value_name = "ADDRESS",
         help = "The address of the account to fetch the balance of"
+    )]
+    pub address: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+struct Rewards {
+    #[arg(
+        // long,
+        value_name = "ADDRESS",
+        help = "The address of the account to fetch the rewards balance of"
     )]
     pub address: Option<String>,
 }
@@ -91,14 +104,14 @@ struct Mine {
 #[derive(Parser, Debug)]
 struct Claim {
     #[arg(
-        long,
+        // long,
         value_name = "AMOUNT",
         help = "The amount of rewards to claim. Defaults to max."
     )]
-    amount: Option<u64>,
+    amount: Option<f64>,
 
     #[arg(
-        long,
+        // long,
         value_name = "TOKEN_ACCOUNT_ADDRESS",
         help = "Token account to receive mining rewards."
     )]
@@ -147,6 +160,9 @@ async fn main() {
         Commands::Balance(cmd) => {
             miner.balance(cmd.address).await;
         }
+        Commands::Rewards(cmd) => {
+            miner.rewards(cmd.address).await;
+        }
         Commands::Mine(_cmd) => {
             miner.mine().await;
         }
@@ -155,7 +171,7 @@ async fn main() {
                 Some(beneficiary) => {
                     Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
                 }
-                None => miner.initialize_token_account().await,
+                None => miner.initialize_ata().await,
             };
             miner.claim(cluster, beneficiary, cmd.amount).await;
         }
@@ -208,6 +224,22 @@ impl<'a> Miner<'a> {
                 println!("{:?}", err);
             }
         }
+    }
+
+    pub async fn rewards(&self, address: Option<String>) {
+        let address = if let Some(address) = address {
+            if let Ok(address) = Pubkey::from_str(&address) {
+                address
+            } else {
+                println!("Invalid address: {:?}", address);
+                return;
+            }
+        } else {
+            self.signer.pubkey()
+        };
+        let proof = get_proof(self.cluster.clone(), address).await;
+        let amount = (proof.claimable_rewards as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64);
+        println!("{:} ORE", amount);
     }
 
     async fn register(&self) {
@@ -335,11 +367,11 @@ impl<'a> Miner<'a> {
         }
     }
 
-    async fn claim(&self, cluster: String, beneficiary: Pubkey, amount: Option<u64>) {
+    async fn claim(&self, cluster: String, beneficiary: Pubkey, amount: Option<f64>) {
         let pubkey = self.signer.pubkey();
         let client = RpcClient::new_with_commitment(cluster, CommitmentConfig::processed());
         let amount = if let Some(amount) = amount {
-            amount
+            (amount * 10f64.powf(ore::TOKEN_DECIMALS as f64)) as u64
         } else {
             match client.get_account(&proof_pubkey(pubkey)).await {
                 Ok(proof_account) => {
@@ -352,6 +384,7 @@ impl<'a> Miner<'a> {
                 }
             }
         };
+        let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
         let recent_blockhash = client.get_latest_blockhash().await.unwrap();
         let tx = Transaction::new_signed_with_payer(
@@ -360,13 +393,15 @@ impl<'a> Miner<'a> {
             &[self.signer],
             recent_blockhash,
         );
-        let sig = client.send_and_confirm_transaction(&tx).await.ok();
-        let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
-        println!(
-            "Successfully claimed {:} ORE to account {:}",
-            amountf, beneficiary
-        );
-        println!("Transaction: {:?}", sig);
+        match client.send_and_confirm_transaction(&tx).await {
+            Ok(sig) => {
+                println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
+                println!("{:?}", sig);
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+            }
+        }
     }
 
     fn _find_next_hash(&self, hash: KeccakHash, difficulty: KeccakHash) -> (KeccakHash, u64) {
@@ -462,49 +497,40 @@ impl<'a> Miner<'a> {
         let recent_blockhash = client.get_latest_blockhash().await.unwrap();
         tx.sign(&[&self.signer], recent_blockhash);
         match client.send_and_confirm_transaction(&tx).await {
-            Ok(sig) => println!("Transaction successful with signature: {:?}", sig),
+            Ok(sig) => println!("{:?}", sig),
             Err(e) => println!("Transaction failed: {:?}", e),
         }
     }
 
-    async fn initialize_token_account(&self) -> Pubkey {
+    async fn initialize_ata(&self) -> Pubkey {
         // Initialize client.
-        let authority = self.signer.pubkey();
         let client =
             RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::processed());
 
         // Build instructions.
-        let token_account_keypair = Keypair::new();
-        let token_account_pubkey = token_account_keypair.pubkey();
-        let rent = client
-            .get_minimum_balance_for_rent_exemption(TokenAccount::LEN)
-            .await
-            .unwrap();
-        let create_account_instruction = system_instruction::create_account(
+        let token_account_pubkey = spl_associated_token_account::get_associated_token_address(
             &self.signer.pubkey(),
-            &token_account_pubkey,
-            rent,
-            TokenAccount::LEN as u64,
-            &spl_token::id(),
-        );
-        let initialize_account_instruction = spl_token::instruction::initialize_account(
-            &spl_token::id(),
-            &token_account_pubkey,
             &ore::MINT_ADDRESS,
-            &authority,
-        )
-        .unwrap();
+        );
+
+        // Check if ata already exists
+        if let Ok(Some(_ata)) = client.get_token_account(&token_account_pubkey).await {
+            return token_account_pubkey;
+        }
 
         // Sign and send transaction.
-        let mut tx = Transaction::new_with_payer(
-            &[create_account_instruction, initialize_account_instruction],
-            Some(&self.signer.pubkey()),
+        let ix = spl_associated_token_account::instruction::create_associated_token_account(
+            &self.signer.pubkey(),
+            &self.signer.pubkey(),
+            &ore::MINT_ADDRESS,
+            &spl_token::id(),
         );
+        let mut tx = Transaction::new_with_payer(&[ix], Some(&self.signer.pubkey()));
         let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-        tx.sign(&[&self.signer, &token_account_keypair], recent_blockhash);
+        tx.sign(&[&self.signer], recent_blockhash);
         let result = client.send_and_confirm_transaction(&tx).await;
         match result {
-            Ok(sig) => println!("Transaction successful with signature: {:?}", sig),
+            Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }
 
