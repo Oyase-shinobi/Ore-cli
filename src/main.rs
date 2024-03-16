@@ -1,6 +1,5 @@
 use std::{
-    borrow::BorrowMut,
-    io::{stdout, Stdout, Write},
+    io::{stdout, Write},
     str::FromStr,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
@@ -19,18 +18,16 @@ use ore::{
     BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION, MINT_ADDRESS, PROOF, TREASURY_ADDRESS,
 };
 use solana_client::{client_error::ClientErrorKind, nonblocking::rpc_client::RpcClient};
-use solana_program::{program_pack::Pack, pubkey::Pubkey, sysvar};
+use solana_program::{pubkey::Pubkey, sysvar};
 use solana_sdk::{
     clock::Clock,
     commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     keccak::{hashv, Hash as KeccakHash},
     signature::{read_keypair_file, Keypair, Signer},
-    system_instruction,
     transaction::Transaction,
 };
 use spl_associated_token_account::get_associated_token_address;
-use spl_token::state::Account as TokenAccount;
 
 // TODO Fetch hardware concurrency dynamically
 const NUM_THREADS: u64 = 6;
@@ -60,6 +57,9 @@ enum Commands {
 
     #[command(about = "Fetch your balance of unclaimed mining rewards")]
     Rewards(Rewards),
+
+    #[command(about = "Fetch the treasury account and balance")]
+    Treasury(TreasuryCmd),
 
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
@@ -97,6 +97,12 @@ struct Rewards {
 // Arguments specific to the foo subcommand
 #[derive(Parser, Debug)]
 struct Mine {
+    // TODO Thread count
+}
+
+// Arguments specific to the foo subcommand
+#[derive(Parser, Debug)]
+struct TreasuryCmd {
     // TODO Thread count
 }
 
@@ -162,6 +168,9 @@ async fn main() {
         }
         Commands::Rewards(cmd) => {
             miner.rewards(cmd.address).await;
+        }
+        Commands::Treasury(_) => {
+            miner.treasury().await;
         }
         Commands::Mine(_cmd) => {
             miner.mine().await;
@@ -240,6 +249,28 @@ impl<'a> Miner<'a> {
         let proof = get_proof(self.cluster.clone(), address).await;
         let amount = (proof.claimable_rewards as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64);
         println!("{:} ORE", amount);
+    }
+
+    pub async fn treasury(&self) {
+        let client =
+            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::processed());
+        if let Ok(Some(treasury_tokens)) = client.get_token_account(&treasury_tokens_pubkey()).await
+        {
+            let treasury = get_treasury(self.cluster.clone()).await;
+            let balance = treasury_tokens.token_amount.ui_amount_string;
+            println!("{:} ORE", balance);
+            println!("Admin: {}", treasury.admin);
+            println!("Difficulty: {}", treasury.difficulty.to_string());
+            println!("Last reset at: {}", treasury.last_reset_at);
+            println!(
+                "Reward rate: {} ORE",
+                (treasury.reward_rate as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64)
+            );
+            println!(
+                "Total claimed rewards: {} ORE",
+                (treasury.total_claimed_rewards as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64)
+            );
+        }
     }
 
     async fn register(&self) {
