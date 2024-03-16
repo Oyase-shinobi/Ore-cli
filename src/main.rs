@@ -1,10 +1,17 @@
 use std::{
+    borrow::BorrowMut,
+    io::{stdout, Stdout, Write},
     str::FromStr,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use cached::proc_macro::cached;
 use clap::{command, Parser, Subcommand};
+use crossterm::{
+    cursor, execute,
+    terminal::{self, ClearType},
+    QueueableCommand,
+};
 use ore::{
     self,
     state::{Proof, Treasury},
@@ -227,18 +234,29 @@ impl<'a> Miner<'a> {
         // Register, if needed.
         self.register().await;
 
+        let mut stdout = stdout();
+        stdout.queue(cursor::SavePosition).unwrap();
+
         // Start mining loop
         loop {
             // Find a valid hash.
             let treasury = get_treasury(self.cluster.clone()).await;
             let proof = get_proof(self.cluster.clone(), self.signer.pubkey()).await;
+            execute!(
+                stdout,
+                cursor::MoveTo(0, 0),
+                terminal::Clear(ClearType::All)
+            )
+            .ok();
+            stdout
+                .write_all(format!("Searching for valid hash...\n").as_bytes())
+                .ok();
             let (next_hash, nonce) =
                 self.find_next_hash_par(proof.hash.into(), treasury.difficulty.into());
-            println!(
-                "Found a valid hash {:?} nonce: {:?}",
-                next_hash.clone(),
-                nonce
-            );
+            stdout
+                .write_all(format!("\nSubmitting hash for validation... \n").as_bytes())
+                .ok();
+            stdout.flush().ok();
 
             // Submit mine tx.
             let client =
@@ -289,7 +307,8 @@ impl<'a> Miner<'a> {
                 let result = client.send_and_confirm_transaction(&tx).await;
                 match result {
                     Ok(sig) => {
-                        println!("Sig: {}", sig);
+                        stdout.write(format!("Success: {}", sig).as_bytes()).ok();
+                        // println!("Sig: {}", sig);
                         break;
                     }
                     Err(err) => {
@@ -300,14 +319,14 @@ impl<'a> Miner<'a> {
                                 //      thread 'main' panicked at 'Failed to submit transaction: SolanaClientError(Error { request: None, kind: TransactionError(InstructionError(0, Custom(6000))) })', src/main.rs:193:26
                                 if err.to_string().contains("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1775") {
                                     // Bus has no remaining funds. Use a different one.
-                                    println!("Bus {} is drained. Finding another one.", bus_id);
+                                    // println!("Bus {} is drained. Finding another one.", bus_id);
                                     invalid_busses.push(bus_id);
                                 } else {
-                                    log::error!("{:?}", err.to_string());
+                                    // log::error!("{:?}", err.to_string());
                                 }
                             }
                             _ => {
-                                println!("Unhandled error {:?}", err);
+                                // println!("Unhandled error {:?}", err);
                             }
                         }
                     }
@@ -375,30 +394,39 @@ impl<'a> Miner<'a> {
             KeccakHash::new_from_array([0; 32]),
             0,
         )));
-
-        println!("Searching for a valid hash...");
         let pubkey = self.signer.pubkey();
         let thread_handles: Vec<_> = (0..NUM_THREADS)
             .map(|i| {
                 std::thread::spawn({
                     let found_solution = found_solution.clone();
                     let solution = solution.clone();
+                    let mut stdout = stdout();
                     move || {
                         let n = u64::MAX.saturating_div(NUM_THREADS).saturating_mul(i);
                         let mut next_hash: KeccakHash;
                         let mut nonce: u64 = n;
                         loop {
-                            if nonce % 10_000 == 0 {
-                                if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
-                                    return;
-                                }
-                            }
                             next_hash = hashv(&[
                                 hash.to_bytes().as_slice(),
                                 pubkey.to_bytes().as_slice(),
                                 nonce.to_le_bytes().as_slice(),
                             ]);
+                            if nonce % 10_000 == 0 {
+                                if found_solution.load(std::sync::atomic::Ordering::Relaxed) {
+                                    return;
+                                }
+                                if n == 0 {
+                                    stdout
+                                        .write_all(
+                                            format!("\r{}", next_hash.to_string()).as_bytes(),
+                                        )
+                                        .ok();
+                                }
+                            }
                             if next_hash.le(&difficulty) {
+                                stdout
+                                    .write_all(format!("\r{}", next_hash.to_string()).as_bytes())
+                                    .ok();
                                 found_solution.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let mut w_solution = solution.lock().expect("failed to lock mutex");
                                 *w_solution = (next_hash, nonce);
