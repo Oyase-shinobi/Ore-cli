@@ -1,6 +1,8 @@
 [package]
-name = "ore-miner"
+name = "ore-cli"
 version = "0.1.0"
+description = "A command line interface for the Ore program."
+license = "Apache-2.0"
 edition = "2021"
 
 [[bin]]
