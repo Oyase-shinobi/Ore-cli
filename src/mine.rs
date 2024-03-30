@@ -34,19 +34,16 @@ impl<'a> Miner<'a> {
         self.register().await;
 
         let mut stdout = stdout();
-        stdout.queue(cursor::SavePosition).unwrap();
+        // stdout.queue(cursor::SavePosition).unwrap();
 
         // Start mining loop
-        loop {
+        'mine: loop {
             // Find a valid hash.
             let treasury = get_treasury(self.cluster.clone()).await;
             let proof = get_proof(self.cluster.clone(), self.signer.pubkey()).await;
-            execute!(
-                stdout,
-                cursor::MoveTo(0, 0),
-                terminal::Clear(ClearType::All)
-            )
-            .ok();
+
+            // Escape sequence that clears the screen and the scrollback buffer
+            stdout.write_all(b"\x1b[2J\x1b[3J\x1b[H").ok();
             stdout
                 .write_all(format!("Searching for valid hash...\n").as_bytes())
                 .ok();
@@ -63,14 +60,18 @@ impl<'a> Miner<'a> {
             let mut bus_id = 0;
             let mut invalid_busses: Vec<u8> = vec![];
             let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-            loop {
+            'submit: loop {
                 // Find a valid bus.
                 if invalid_busses.len().eq(&(BUS_COUNT as usize)) {
                     // All busses are drained. Wait until next epoch.
                     std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
                 if invalid_busses.contains(&bus_id) {
+                    println!("Bus {} is empty... ", bus_id);
                     bus_id += 1;
+                    if bus_id.ge(&(BUS_COUNT as u8)) {
+                        bus_id = 0;
+                    }
                 }
 
                 // Reset if epoch has ended
@@ -115,9 +116,14 @@ impl<'a> Miner<'a> {
                                 // TODO Why is BusInsufficientFunds an RpcError but EpochNeedsReset is a TransactionError ?
                                 //      Unhandled error Error { request: None, kind: TransactionError(InstructionError(0, Custom(6003))) }
                                 //      thread 'main' panicked at 'Failed to submit transaction: SolanaClientError(Error { request: None, kind: TransactionError(InstructionError(0, Custom(6000))) })', src/main.rs:193:26
-                                if err.to_string().contains("Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1775") {
+                                if err.to_string().contains("custom program error: 0x5") {
                                     // Bus has no remaining funds. Use a different one.
                                     invalid_busses.push(bus_id);
+                                } else if err
+                                    .to_string()
+                                    .contains("This transaction has already been processed")
+                                {
+                                    break 'submit;
                                 } else {
                                     stdout
                                         .write_all(format!("\n{:?} \n", err.to_string()).as_bytes())

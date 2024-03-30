@@ -1,4 +1,5 @@
 mod balance;
+mod busses;
 mod claim;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -34,6 +35,9 @@ enum Commands {
     #[command(about = "Fetch the Ore balance of an account")]
     Balance(BalanceArgs),
 
+    #[command(about = "Fetch the distributable rewards of the busses")]
+    Busses(BussesArgs),
+
     #[command(about = "Mine Ore using local compute")]
     Mine(MineArgs),
 
@@ -68,6 +72,9 @@ struct BalanceArgs {
     )]
     pub address: Option<String>,
 }
+
+#[derive(Parser, Debug)]
+struct BussesArgs {}
 
 #[derive(Parser, Debug)]
 struct RewardsArgs {
@@ -138,6 +145,9 @@ async fn main() {
     match args.command {
         Commands::Balance(args) => {
             miner.balance(args.address).await;
+        }
+        Commands::Busses(_) => {
+            miner.busses().await;
         }
         Commands::Rewards(args) => {
             miner.rewards(args.address).await;

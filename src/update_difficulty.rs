@@ -9,7 +9,7 @@ use crate::Miner;
 impl<'a> Miner<'a> {
     pub async fn update_difficulty(&self) {
         let new_difficulty = KeccakHash::new_from_array([
-            0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            0, 0, 0, 127, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
             255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         ]);
         let client =
