@@ -1,6 +1,6 @@
 [package]
 name = "ore-cli"
-version = "0.2.1"
+version = "0.2.2"
 description = "A command line interface for the Ore program."
 license = "Apache-2.0"
 edition = "2021"
@@ -17,7 +17,6 @@ admin = []
 bincode = "1.3.3"
 cached = "0.46.1"
 clap = { version = "4.4.12", features = ["derive"] }
-crossterm = "0.27.0"
 futures = "0.3.30"
 log = "0.4"
 ore = { package = "ore-program", version = "0.0.6" }

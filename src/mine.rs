@@ -3,11 +3,6 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
-use crossterm::{
-    cursor, execute,
-    terminal::{self, ClearType},
-    QueueableCommand,
-};
 use ore::{self, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use solana_client::{client_error::ClientErrorKind, nonblocking::rpc_client::RpcClient};
 use solana_sdk::{
@@ -37,7 +32,7 @@ impl<'a> Miner<'a> {
         // stdout.queue(cursor::SavePosition).unwrap();
 
         // Start mining loop
-        'mine: loop {
+        loop {
             // Find a valid hash.
             let treasury = get_treasury(self.cluster.clone()).await;
             let proof = get_proof(self.cluster.clone(), self.signer.pubkey()).await;
