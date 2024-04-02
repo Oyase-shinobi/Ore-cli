@@ -17,11 +17,8 @@ use crate::{
     Miner,
 };
 
-// TODO Fetch hardware concurrency dynamically
-const NUM_THREADS: u64 = 6;
-
 impl Miner {
-    pub async fn mine(&self) {
+    pub async fn mine(&self, threads: u64) {
         // Register, if needed.
         let signer = self.signer();
         self.register().await;
@@ -56,7 +53,7 @@ impl Miner {
                 .write_all(format!("Searching for valid hash...\n").as_bytes())
                 .ok();
             let (next_hash, nonce) =
-                self.find_next_hash_par(proof.hash.into(), treasury.difficulty.into());
+                self.find_next_hash_par(proof.hash.into(), treasury.difficulty.into(), threads);
             stdout
                 .write_all(format!("\nSubmitting hash for validation... \n").as_bytes())
                 .ok();
@@ -150,7 +147,12 @@ impl Miner {
         (next_hash, nonce)
     }
 
-    fn find_next_hash_par(&self, hash: KeccakHash, difficulty: KeccakHash) -> (KeccakHash, u64) {
+    fn find_next_hash_par(
+        &self,
+        hash: KeccakHash,
+        difficulty: KeccakHash,
+        threads: u64,
+    ) -> (KeccakHash, u64) {
         let found_solution = Arc::new(AtomicBool::new(false));
         let solution = Arc::new(Mutex::<(KeccakHash, u64)>::new((
             KeccakHash::new_from_array([0; 32]),
@@ -158,14 +160,14 @@ impl Miner {
         )));
         let signer = self.signer();
         let pubkey = signer.pubkey();
-        let thread_handles: Vec<_> = (0..NUM_THREADS)
+        let thread_handles: Vec<_> = (0..threads)
             .map(|i| {
                 std::thread::spawn({
                     let found_solution = found_solution.clone();
                     let solution = solution.clone();
                     let mut stdout = stdout();
                     move || {
-                        let n = u64::MAX.saturating_div(NUM_THREADS).saturating_mul(i);
+                        let n = u64::MAX.saturating_div(threads).saturating_mul(i);
                         let mut next_hash: KeccakHash;
                         let mut nonce: u64 = n;
                         loop {
