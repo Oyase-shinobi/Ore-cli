@@ -691,9 +691,9 @@ checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
 name = "bs58"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5353f36341f7451062466f0b755b96ac3a9547e4d7f6b70d603fc721a7d7896"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
  "tinyvec",
 ]
@@ -2424,9 +2424,10 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-cli"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "bincode",
+ "bs58 0.5.1",
  "cached",
  "chrono",
  "clap 4.4.12",
@@ -2445,9 +2446,11 @@ dependencies = [
 
 [[package]]
 name = "ore-program"
-version = "1.1.0"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1438154357d3952bd1d8f683d7ded7977a317b86495031313a6a8799afe2ec8"
 dependencies = [
- "bs58 0.5.0",
+ "bs58 0.5.1",
  "bytemuck",
  "mpl-token-metadata",
  "num_enum 0.7.2",

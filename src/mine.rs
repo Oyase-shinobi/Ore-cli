@@ -65,6 +65,7 @@ impl Miner {
             // Submit mine tx.
             let mut bus_id = 0;
             let mut invalid_busses: Vec<u8> = vec![];
+            let mut needs_reset = false;
             'submit: loop {
                 // Find a valid bus.
                 if invalid_busses.len().eq(&(BUS_COUNT as usize)) {
@@ -75,6 +76,7 @@ impl Miner {
                     println!("Bus {} is empty... ", bus_id);
                     bus_id += 1;
                     if bus_id.ge(&(BUS_COUNT as u8)) {
+                        std::thread:sleep(Duration::from_secs(1));
                         bus_id = 0;
                     }
                 }
@@ -83,11 +85,12 @@ impl Miner {
                 let treasury = get_treasury(self.cluster.clone()).await;
                 let clock = get_clock_account(self.cluster.clone()).await;
                 let threshold = treasury.last_reset_at.saturating_add(EPOCH_DURATION);
-                if clock.unix_timestamp.ge(&threshold) {
+                if clock.unix_timestamp.ge(&threshold) || needs_reset {
                     let reset_ix = ore::instruction::reset(signer.pubkey());
                     self.send_and_confirm(&[reset_ix])
                         .await
                         .expect("Transaction failed");
+                    needs_reset = false;
                 }
 
                 // Submit request.
@@ -102,33 +105,26 @@ impl Miner {
                         stdout.write(format!("Success: {}", sig).as_bytes()).ok();
                         break;
                     }
-                    Err(err) => {
-                        match err.kind {
-                            ClientErrorKind::RpcError(err) => {
-                                // TODO Why is BusInsufficientFunds an RpcError but EpochNeedsReset is a TransactionError ?
-                                //      Unhandled error Error { request: None, kind: TransactionError(InstructionError(0, Custom(6003))) }
-                                //      thread 'main' panicked at 'Failed to submit transaction: SolanaClientError(Error { request: None, kind: TransactionError(InstructionError(0, Custom(6000))) })', src/main.rs:193:26
-                                if err.to_string().contains("custom program error: 0x5") {
-                                    // Bus has no remaining funds. Use a different one.
-                                    invalid_busses.push(bus_id);
-                                } else if err
-                                    .to_string()
-                                    .contains("This transaction has already been processed")
-                                {
-                                    break 'submit;
-                                } else {
-                                    stdout
-                                        .write_all(format!("\n{:?} \n", err.to_string()).as_bytes())
-                                        .ok();
-                                }
-                            }
-                            _ => {
+                    Err(err) => match err.kind {
+                        ClientErrorKind::Custom(msg) => {
+                            if msg.contains("Bus insufficient") {
+                                invalid_busses.push(bus_id);
+                            } else if msg.contains("Needs reset") {
+                                needs_reset = true;
+                            } else if msg.contains("Hash invalid") {
+                                break 'submit;
+                            } else {
                                 stdout
-                                    .write_all(format!("\nUnhandled error {:?} \n", err).as_bytes())
+                                    .write_all(format!("\n{:?} \n", msg.to_string()).as_bytes())
                                     .ok();
                             }
                         }
-                    }
+                        _ => {
+                            stdout
+                                .write_all(format!("\nUnhandled error {:?} \n", err).as_bytes())
+                                .ok();
+                        }
+                    },
                 }
             }
         }
