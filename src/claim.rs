@@ -3,15 +3,9 @@ use std::str::FromStr;
 use ore::{self, state::Proof, utils::AccountDeserialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::{
-    commitment_config::CommitmentConfig, compute_budget::ComputeBudgetInstruction,
-    signature::Signer,
-};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
 
 use crate::{utils::proof_pubkey, Miner};
-
-const CU_BUDGET_CLAIM: u32 = 14_000;
-const CU_BUDGET_ATA: u32 = 24_000;
 
 impl Miner {
     pub async fn claim(&self, cluster: String, beneficiary: Option<String>, amount: Option<f64>) {
@@ -39,10 +33,8 @@ impl Miner {
             }
         };
         let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
-        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_BUDGET_CLAIM);
-        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
-        match self.send_and_confirm(&[cu_limit_ix, cu_price_ix, ix]).await {
+        match self.send_and_confirm(&[ix]).await {
             Ok(sig) => {
                 println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
                 println!("{:?}", sig);
@@ -71,15 +63,13 @@ impl Miner {
         }
 
         // Sign and send transaction.
-        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_BUDGET_ATA);
-        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
             &signer.pubkey(),
             &signer.pubkey(),
             &ore::MINT_ADDRESS,
             &spl_token::id(),
         );
-        match self.send_and_confirm(&[cu_limit_ix, cu_price_ix, ix]).await {
+        match self.send_and_confirm(&[ix]).await {
             Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }

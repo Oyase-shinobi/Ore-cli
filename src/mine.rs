@@ -8,7 +8,6 @@ use chrono::{Duration as ChronoDuration, Utc};
 use ore::{self, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION, START_AT};
 use solana_client::client_error::ClientErrorKind;
 use solana_sdk::{
-    compute_budget::ComputeBudgetInstruction,
     keccak::{hashv, Hash as KeccakHash},
     signature::Signer,
 };
@@ -17,9 +16,6 @@ use crate::{
     utils::{get_clock_account, get_proof, get_treasury},
     Miner,
 };
-
-const COMPUTE_BUDGET_MINE: u32 = 3230;
-const COMPUTE_BUDGET_RESET: u32 = 15_000;
 
 // TODO Fetch hardware concurrency dynamically
 const NUM_THREADS: u64 = 6;
@@ -88,31 +84,20 @@ impl Miner {
                 let clock = get_clock_account(self.cluster.clone()).await;
                 let threshold = treasury.last_reset_at.saturating_add(EPOCH_DURATION);
                 if clock.unix_timestamp.ge(&threshold) {
-                    let cu_budget_ix =
-                        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_RESET);
-                    let cu_price_ix =
-                        ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
                     let reset_ix = ore::instruction::reset(signer.pubkey());
-                    self.send_and_confirm(&[cu_budget_ix, cu_price_ix, reset_ix])
+                    self.send_and_confirm(&[reset_ix])
                         .await
                         .expect("Transaction failed");
                 }
 
                 // Submit request.
-                let cu_budget_ix =
-                    ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_MINE);
-                let cu_price_ix =
-                    ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
                 let ix_mine = ore::instruction::mine(
                     signer.pubkey(),
                     BUS_ADDRESSES[bus_id as usize],
                     next_hash.into(),
                     nonce,
                 );
-                match self
-                    .send_and_confirm(&[cu_budget_ix, cu_price_ix, ix_mine])
-                    .await
-                {
+                match self.send_and_confirm(&[ix_mine]).await {
                     Ok(sig) => {
                         stdout.write(format!("Success: {}", sig).as_bytes()).ok();
                         break;
