@@ -813,9 +813,9 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
-version = "0.4.31"
+version = "0.4.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f2c685bad3eb3d45a01354cedb7d5faa66194d1d58ba6e267a8de788f79db38"
+checksum = "8a0d04d43504c61aa6c7531f1871dd0d418d91130162063b789da00fd7057a5e"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -823,7 +823,7 @@ dependencies = [
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.0",
 ]
 
 [[package]]
@@ -2424,10 +2424,11 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bincode",
  "cached",
+ "chrono",
  "clap 4.4.12",
  "futures",
  "log",
@@ -2436,6 +2437,7 @@ dependencies = [
  "solana-client",
  "solana-program",
  "solana-sdk",
+ "solana-transaction-status",
  "spl-associated-token-account",
  "spl-token",
  "tokio",
@@ -2443,9 +2445,9 @@ dependencies = [
 
 [[package]]
 name = "ore-program"
-version = "0.0.6"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b78cb1d3e9ed66b2310168382842e44d8f4a0173127436962c7e16895b566fb0"
+checksum = "391d25b5538a98e1bfce54526b54b622578aed6f127c92ea2d9f217f1e17af50"
 dependencies = [
  "bs58 0.5.0",
  "bytemuck",

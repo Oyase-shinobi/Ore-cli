@@ -1,16 +1,16 @@
 use std::{
     io::{stdout, Write},
     sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Duration,
 };
 
-use ore::{self, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
-use solana_client::{client_error::ClientErrorKind, nonblocking::rpc_client::RpcClient};
+use chrono::{Duration as ChronoDuration, Utc};
+use ore::{self, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION, START_AT};
+use solana_client::client_error::ClientErrorKind;
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     keccak::{hashv, Hash as KeccakHash},
     signature::Signer,
-    transaction::Transaction,
 };
 
 use crate::{
@@ -18,24 +18,40 @@ use crate::{
     Miner,
 };
 
-const COMPUTE_BUDGET: u32 = 3230;
+const COMPUTE_BUDGET_MINE: u32 = 3230;
+const COMPUTE_BUDGET_RESET: u32 = 15_000;
 
 // TODO Fetch hardware concurrency dynamically
 const NUM_THREADS: u64 = 6;
 
-impl<'a> Miner<'a> {
+impl Miner {
     pub async fn mine(&self) {
         // Register, if needed.
+        let signer = self.signer();
         self.register().await;
 
         let mut stdout = stdout();
-        // stdout.queue(cursor::SavePosition).unwrap();
+
+        // Wait for mining to begin if necessary
+        let now_unix_timestamp = Utc::now().timestamp();
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            let duration = START_AT - now_unix_timestamp;
+            let t = format_duration(duration);
+            stdout.write_all(b"\x1b[2J\x1b[3J\x1b[H").ok();
+            stdout
+                .write_all(format!("Waiting for mining to begin... {}\n", t).as_bytes())
+                .ok();
+            if START_AT.gt(&now_unix_timestamp) {
+                break;
+            }
+        }
 
         // Start mining loop
         loop {
             // Find a valid hash.
             let treasury = get_treasury(self.cluster.clone()).await;
-            let proof = get_proof(self.cluster.clone(), self.signer.pubkey()).await;
+            let proof = get_proof(self.cluster.clone(), signer.pubkey()).await;
 
             // Escape sequence that clears the screen and the scrollback buffer
             stdout.write_all(b"\x1b[2J\x1b[3J\x1b[H").ok();
@@ -50,11 +66,8 @@ impl<'a> Miner<'a> {
             stdout.flush().ok();
 
             // Submit mine tx.
-            let client =
-                RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::processed());
             let mut bus_id = 0;
             let mut invalid_busses: Vec<u8> = vec![];
-            let recent_blockhash = client.get_latest_blockhash().await.unwrap();
             'submit: loop {
                 // Find a valid bus.
                 if invalid_busses.len().eq(&(BUS_COUNT as usize)) {
@@ -74,35 +87,33 @@ impl<'a> Miner<'a> {
                 let clock = get_clock_account(self.cluster.clone()).await;
                 let threshold = treasury.last_reset_at.saturating_add(EPOCH_DURATION);
                 if clock.unix_timestamp.ge(&threshold) {
-                    let reset_ix = ore::instruction::reset(self.signer.pubkey());
-                    let tx = Transaction::new_signed_with_payer(
-                        &[reset_ix],
-                        Some(&self.signer.pubkey()),
-                        &[self.signer],
-                        recent_blockhash,
-                    );
-                    client.send_and_confirm_transaction(&tx).await.ok();
+                    let cu_budget_ix =
+                        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_RESET);
+                    let cu_price_ix =
+                        ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
+                    let reset_ix = ore::instruction::reset(signer.pubkey());
+                    self.send_and_confirm(&[cu_budget_ix, cu_price_ix, reset_ix])
+                        .await
+                        .expect("Transaction failed");
                 }
 
                 // Submit request.
-                let ix_cu_budget = ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET);
+                let cu_budget_ix =
+                    ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_MINE);
+                let cu_price_ix =
+                    ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
                 let ix_mine = ore::instruction::mine(
-                    self.signer.pubkey(),
+                    signer.pubkey(),
                     BUS_ADDRESSES[bus_id as usize],
                     next_hash.into(),
                     nonce,
                 );
-                let tx = Transaction::new_signed_with_payer(
-                    &[ix_cu_budget, ix_mine],
-                    Some(&self.signer.pubkey()),
-                    &[self.signer],
-                    recent_blockhash,
-                );
-                let result = client.send_and_confirm_transaction(&tx).await;
-                match result {
+                match self
+                    .send_and_confirm(&[cu_budget_ix, cu_price_ix, ix_mine])
+                    .await
+                {
                     Ok(sig) => {
                         stdout.write(format!("Success: {}", sig).as_bytes()).ok();
-                        // println!("Sig: {}", sig);
                         break;
                     }
                     Err(err) => {
@@ -138,12 +149,13 @@ impl<'a> Miner<'a> {
     }
 
     fn _find_next_hash(&self, hash: KeccakHash, difficulty: KeccakHash) -> (KeccakHash, u64) {
+        let signer = self.signer();
         let mut next_hash: KeccakHash;
         let mut nonce = 0u64;
         loop {
             next_hash = hashv(&[
                 hash.to_bytes().as_slice(),
-                self.signer.pubkey().to_bytes().as_slice(),
+                signer.pubkey().to_bytes().as_slice(),
                 nonce.to_le_bytes().as_slice(),
             ]);
             if next_hash.le(&difficulty) {
@@ -162,7 +174,8 @@ impl<'a> Miner<'a> {
             KeccakHash::new_from_array([0; 32]),
             0,
         )));
-        let pubkey = self.signer.pubkey();
+        let signer = self.signer();
+        let pubkey = signer.pubkey();
         let thread_handles: Vec<_> = (0..NUM_THREADS)
             .map(|i| {
                 std::thread::spawn({
@@ -214,4 +227,12 @@ impl<'a> Miner<'a> {
         let r_solution = solution.lock().expect("Failed to get lock");
         *r_solution
     }
+}
+
+pub fn format_duration(seconds: i64) -> String {
+    let duration = ChronoDuration::try_seconds(seconds).unwrap();
+    let hours = duration.num_hours();
+    let minutes = duration.num_minutes() % 60;
+    let seconds = duration.num_seconds() % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }

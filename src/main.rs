@@ -6,6 +6,7 @@ mod initialize;
 mod mine;
 mod register;
 mod rewards;
+mod send_and_confirm;
 mod treasury;
 #[cfg(feature = "admin")]
 mod update_admin;
@@ -18,14 +19,38 @@ use std::sync::Arc;
 use clap::{command, Parser, Subcommand};
 use solana_sdk::signature::{read_keypair_file, Keypair};
 
-struct Miner<'a> {
-    pub signer: &'a Keypair,
+struct Miner {
+    pub keypair_filepath: Option<String>,
+    pub priority_fee: u64,
     pub cluster: String,
 }
 
 #[derive(Parser, Debug)]
 #[command(about, version)]
 struct Args {
+    #[arg(
+        long,
+        value_name = "NETWORK_URL",
+        help = "Network address of your RPC provider",
+        default_value = "https://api.mainnet-beta.solana.com"
+    )]
+    rpc: String,
+
+    #[arg(
+        long,
+        value_name = "KEYPAIR_FILEPATH",
+        help = "Filepath to keypair to use"
+    )]
+    keypair: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "MICROLAMPORTS",
+        help = "Number of microlamports to pay as priority fee per transaction",
+        default_value = "0"
+    )]
+    priority_fee: u64,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -129,17 +154,8 @@ struct UpdateDifficultyArgs {}
 async fn main() {
     // Initialize miner.
     let args = Args::parse();
-    let solana_config_file = solana_cli_config::CONFIG_FILE.as_ref().unwrap().as_str();
-    let solana_config = match solana_cli_config::Config::load(solana_config_file) {
-        Ok(cfg) => cfg,
-        Err(_err) => {
-            println!("Failed fetching solana keypair. Please install the Solana CLI: https://docs.solanalabs.com/cli/install");
-            return;
-        }
-    };
-    let cluster = solana_config.json_rpc_url;
-    let signer = read_keypair_file(solana_config.keypair_path).unwrap();
-    let miner = Arc::new(Miner::new(cluster.clone(), &signer));
+    let cluster = args.rpc;
+    let miner = Arc::new(Miner::new(cluster.clone(), args.priority_fee, args.keypair));
 
     // Execute user command.
     match args.command {
@@ -176,8 +192,19 @@ async fn main() {
     }
 }
 
-impl<'a> Miner<'a> {
-    pub fn new(cluster: String, signer: &'a Keypair) -> Self {
-        Self { signer, cluster }
+impl Miner {
+    pub fn new(cluster: String, priority_fee: u64, keypair_filepath: Option<String>) -> Self {
+        Self {
+            keypair_filepath,
+            priority_fee,
+            cluster,
+        }
+    }
+
+    pub fn signer(&self) -> Keypair {
+        match self.keypair_filepath.clone() {
+            Some(filepath) => read_keypair_file(filepath).unwrap(),
+            None => panic!("No keypair provided"),
+        }
     }
 }

@@ -4,15 +4,20 @@ use ore::{self, state::Proof, utils::AccountDeserialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, signature::Signer, transaction::Transaction,
+    commitment_config::CommitmentConfig, compute_budget::ComputeBudgetInstruction,
+    signature::Signer,
 };
 
 use crate::{utils::proof_pubkey, Miner};
 
-impl<'a> Miner<'a> {
+const CU_BUDGET_CLAIM: u32 = 14_000;
+const CU_BUDGET_ATA: u32 = 24_000;
+
+impl Miner {
     pub async fn claim(&self, cluster: String, beneficiary: Option<String>, amount: Option<f64>) {
-        let pubkey = self.signer.pubkey();
-        let client = RpcClient::new_with_commitment(cluster, CommitmentConfig::processed());
+        let signer = self.signer();
+        let pubkey = signer.pubkey();
+        let client = RpcClient::new_with_commitment(cluster, CommitmentConfig::confirmed());
         let beneficiary = match beneficiary {
             Some(beneficiary) => {
                 Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
@@ -34,15 +39,10 @@ impl<'a> Miner<'a> {
             }
         };
         let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
+        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_BUDGET_CLAIM);
+        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
-        let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-        let tx = Transaction::new_signed_with_payer(
-            &[ix],
-            Some(&pubkey),
-            &[self.signer],
-            recent_blockhash,
-        );
-        match client.send_and_confirm_transaction(&tx).await {
+        match self.send_and_confirm(&[cu_limit_ix, cu_price_ix, ix]).await {
             Ok(sig) => {
                 println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
                 println!("{:?}", sig);
@@ -55,12 +55,13 @@ impl<'a> Miner<'a> {
 
     async fn initialize_ata(&self) -> Pubkey {
         // Initialize client.
+        let signer = self.signer();
         let client =
-            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::processed());
+            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::confirmed());
 
         // Build instructions.
         let token_account_pubkey = spl_associated_token_account::get_associated_token_address(
-            &self.signer.pubkey(),
+            &signer.pubkey(),
             &ore::MINT_ADDRESS,
         );
 
@@ -70,17 +71,15 @@ impl<'a> Miner<'a> {
         }
 
         // Sign and send transaction.
+        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_BUDGET_ATA);
+        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
-            &self.signer.pubkey(),
-            &self.signer.pubkey(),
+            &signer.pubkey(),
+            &signer.pubkey(),
             &ore::MINT_ADDRESS,
             &spl_token::id(),
         );
-        let mut tx = Transaction::new_with_payer(&[ix], Some(&self.signer.pubkey()));
-        let recent_blockhash = client.get_latest_blockhash().await.unwrap();
-        tx.sign(&[&self.signer], recent_blockhash);
-        let result = client.send_and_confirm_transaction(&tx).await;
-        match result {
+        match self.send_and_confirm(&[cu_limit_ix, cu_price_ix, ix]).await {
             Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }

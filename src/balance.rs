@@ -6,8 +6,9 @@ use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
 
 use crate::Miner;
 
-impl<'a> Miner<'a> {
+impl Miner {
     pub async fn balance(&self, address: Option<String>) {
+        let signer = self.signer();
         let address = if let Some(address) = address {
             if let Ok(address) = Pubkey::from_str(&address) {
                 address
@@ -16,10 +17,10 @@ impl<'a> Miner<'a> {
                 return;
             }
         } else {
-            self.signer.pubkey()
+            signer.pubkey()
         };
         let client =
-            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::processed());
+            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::confirmed());
         let token_account_address = spl_associated_token_account::get_associated_token_address(
             &address,
             &ore::MINT_ADDRESS,
