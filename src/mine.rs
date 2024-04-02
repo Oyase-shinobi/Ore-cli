@@ -76,7 +76,7 @@ impl Miner {
                     println!("Bus {} is empty... ", bus_id);
                     bus_id += 1;
                     if bus_id.ge(&(BUS_COUNT as u8)) {
-                        std::thread:sleep(Duration::from_secs(1));
+                        std::thread::sleep(Duration::from_secs(1));
                         bus_id = 0;
                     }
                 }
