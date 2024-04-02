@@ -33,16 +33,17 @@ impl Miner {
         let mut stdout = stdout();
 
         // Wait for mining to begin if necessary
-        let now_unix_timestamp = Utc::now().timestamp();
         loop {
             std::thread::sleep(Duration::from_secs(1));
+            let now_unix_timestamp = Utc::now().timestamp();
             let duration = START_AT - now_unix_timestamp;
             let t = format_duration(duration);
             stdout.write_all(b"\x1b[2J\x1b[3J\x1b[H").ok();
             stdout
                 .write_all(format!("Waiting for mining to begin... {}\n", t).as_bytes())
                 .ok();
-            if START_AT.gt(&now_unix_timestamp) {
+            stdout.flush().ok();
+            if START_AT.le(&now_unix_timestamp) {
                 break;
             }
         }
