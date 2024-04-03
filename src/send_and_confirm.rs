@@ -46,6 +46,19 @@ impl Miner {
         let mut tx = Transaction::new_with_payer(ixs, Some(&signer.pubkey()));
         tx.sign(&[&signer], hash);
 
+        let balance = client
+            .get_balance_with_commitment(&signer.pubkey(), CommitmentConfig::confirmed())
+            .await
+            .unwrap();
+
+        // Return error if balance is zero
+        if balance.value <= 0 {
+            return Err(ClientError {
+                request: None,
+                kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
+            });
+        }
+
         // Sim and prepend cu ixs
         let sim_res = client
             .simulate_transaction_with_config(
