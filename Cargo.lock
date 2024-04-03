@@ -2434,6 +2434,7 @@ dependencies = [
  "futures",
  "log",
  "ore-program",
+ "rand 0.8.5",
  "solana-cli-config",
  "solana-client",
  "solana-program",
