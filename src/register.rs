@@ -17,7 +17,7 @@ impl Miner {
         // Sign and send transaction.
         println!("Generating challenge...");
         let ix = ore::instruction::register(signer.pubkey());
-        self.send_and_confirm(&[ix])
+        self.send_and_confirm(&[ix], false)
             .await
             .expect("Transaction failed");
     }

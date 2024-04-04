@@ -6,29 +6,44 @@ use std::{
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
+    rpc_config::RpcSendTransactionConfig,
 };
-use solana_program::instruction::{Instruction, InstructionError};
+use solana_program::instruction::Instruction;
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
-    compute_budget::ComputeBudgetInstruction,
     signature::{Signature, Signer},
-    transaction::{Transaction, TransactionError},
+    transaction::Transaction,
 };
-use solana_transaction_status::UiTransactionEncoding;
+use solana_transaction_status::{TransactionConfirmationStatus, UiTransactionEncoding};
 
 use crate::Miner;
 
 const RPC_RETRIES: usize = 1;
-const GATEWAY_RETRIES: usize = 10;
-const CONFIRM_RETRIES: usize = 10;
+const GATEWAY_RETRIES: usize = 4;
+const CONFIRM_RETRIES: usize = 4;
 
 impl Miner {
-    pub async fn send_and_confirm(&self, ixs: &[Instruction]) -> ClientResult<Signature> {
+    pub async fn send_and_confirm(
+        &self,
+        ixs: &[Instruction],
+        skip_confirm: bool,
+    ) -> ClientResult<Signature> {
         let mut stdout = stdout();
         let signer = self.signer();
         let client =
             RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::confirmed());
+
+        // Return error if balance is zero
+        let balance = client
+            .get_balance_with_commitment(&signer.pubkey(), CommitmentConfig::confirmed())
+            .await
+            .unwrap();
+        if balance.value <= 0 {
+            return Err(ClientError {
+                request: None,
+                kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
+            });
+        }
 
         // Build tx
         let (mut hash, mut slot) = client
@@ -42,140 +57,68 @@ impl Miner {
             max_retries: Some(RPC_RETRIES),
             min_context_slot: Some(slot),
         };
-
         let mut tx = Transaction::new_with_payer(ixs, Some(&signer.pubkey()));
         tx.sign(&[&signer], hash);
 
-        let balance = client
-            .get_balance_with_commitment(&signer.pubkey(), CommitmentConfig::confirmed())
-            .await
-            .unwrap();
-
-        // Return error if balance is zero
-        if balance.value <= 0 {
-            return Err(ClientError {
-                request: None,
-                kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
-            });
-        }
-
-        // Sim and prepend cu ixs
-        let sim_res = client
-            .simulate_transaction_with_config(
-                &tx,
-                RpcSimulateTransactionConfig {
-                    sig_verify: false,
-                    replace_recent_blockhash: false,
-                    commitment: Some(CommitmentConfig::confirmed()),
-                    encoding: Some(UiTransactionEncoding::Base64),
-                    accounts: None,
-                    min_context_slot: Some(slot),
-                    inner_instructions: false,
-                },
-            )
-            .await;
-        if let Ok(sim_res) = sim_res {
-            match sim_res.value.err {
-                Some(err) => match err {
-                    TransactionError::InstructionError(_, InstructionError::Custom(e)) => {
-                        if e == 1 {
-                            log::info!("Needs reset!");
-                            return Err(ClientError {
-                                request: None,
-                                kind: ClientErrorKind::Custom("Needs reset".into()),
-                            });
-                        } else if e == 3 {
-                            log::info!("Hash invalid!");
-                            return Err(ClientError {
-                                request: None,
-                                kind: ClientErrorKind::Custom("Hash invalid".into()),
-                            });
-                        } else if e == 5 {
-                            return Err(ClientError {
-                                request: None,
-                                kind: ClientErrorKind::Custom("Bus insufficient".into()),
-                            });
-                        } else {
-                            return Err(ClientError {
-                                request: None,
-                                kind: ClientErrorKind::Custom("Sim failed".into()),
-                            });
-                        }
-                    }
-                    _ => {
-                        return Err(ClientError {
-                            request: None,
-                            kind: ClientErrorKind::Custom("Sim failed".into()),
-                        })
-                    }
-                },
-                None => {
-                    let cu_budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(
-                        sim_res.value.units_consumed.unwrap() as u32 + 1000,
-                    );
-                    let cu_price_ix =
-                        ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
-                    let mut final_ixs = vec![];
-                    final_ixs.extend_from_slice(&[cu_budget_ix, cu_price_ix]);
-                    final_ixs.extend_from_slice(ixs);
-                    tx = Transaction::new_with_payer(&final_ixs, Some(&signer.pubkey()));
-                    tx.sign(&[&signer], hash);
-                }
-            }
-        } else {
-            return Err(ClientError {
-                request: None,
-                kind: ClientErrorKind::Custom("Failed simulation".into()),
-            });
-        };
-
-        // Loop
+        // Submit tx
+        let mut sigs = vec![];
         let mut attempts = 0;
         loop {
             println!("Attempt: {:?}", attempts);
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
-                    log::info!("{:?}", sig);
-                    let mut confirm_check = 0;
-                    'confirm: loop {
-                        match client
-                            .confirm_transaction_with_commitment(
-                                &sig,
-                                CommitmentConfig::confirmed(),
-                            )
-                            .await
-                        {
-                            Ok(confirmed) => {
-                                log::info!(
-                                    "Confirm check {:?}: {:?}",
-                                    confirm_check,
-                                    confirmed.value
-                                );
-                                if confirmed.value {
-                                    return Ok(sig);
+                    sigs.push(sig);
+                    println!("{:?}", sig);
+
+                    // Confirm tx
+                    if skip_confirm {
+                        return Ok(sig);
+                    }
+                    for _ in 0..CONFIRM_RETRIES {
+                        std::thread::sleep(Duration::from_millis(2000));
+                        match client.get_signature_statuses(&sigs).await {
+                            Ok(signature_statuses) => {
+                                println!("Confirms: {:?}", signature_statuses.value);
+                                for signature_status in signature_statuses.value {
+                                    if let Some(signature_status) = signature_status.as_ref() {
+                                        if signature_status.confirmation_status.is_some() {
+                                            let current_commitment = signature_status
+                                                .confirmation_status
+                                                .as_ref()
+                                                .unwrap();
+                                            match current_commitment {
+                                                TransactionConfirmationStatus::Processed => {}
+                                                TransactionConfirmationStatus::Confirmed
+                                                | TransactionConfirmationStatus::Finalized => {
+                                                    println!("Transaction landed!");
+                                                    return Ok(sig);
+                                                }
+                                            }
+                                        } else {
+                                            println!("No status");
+                                        }
+                                    }
                                 }
                             }
+
+                            // Handle confirmation errors
                             Err(err) => {
-                                log::error!("Err: {:?}", err);
+                                println!("Error: {:?}", err);
                             }
                         }
-
-                        // Retry confirm
-                        std::thread::sleep(Duration::from_millis(500));
-                        confirm_check += 1;
-                        if confirm_check.gt(&CONFIRM_RETRIES) {
-                            break 'confirm;
-                        }
                     }
+                    println!("Transaction did not land");
                 }
+
+                // Handle submit errors
                 Err(err) => {
                     println!("Error {:?}", err);
                 }
             }
             stdout.flush().ok();
 
-            // Retry with new hash
-            std::thread::sleep(Duration::from_millis(1000));
+            // Retry
+            std::thread::sleep(Duration::from_millis(200));
             (hash, slot) = client
                 .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
                 .await

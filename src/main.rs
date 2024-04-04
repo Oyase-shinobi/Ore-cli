@@ -1,6 +1,7 @@
 mod balance;
 mod busses;
 mod claim;
+mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
 mod mine;

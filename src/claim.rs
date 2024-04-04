@@ -34,7 +34,7 @@ impl Miner {
         };
         let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
-        match self.send_and_confirm(&[ix]).await {
+        match self.send_and_confirm(&[ix], false).await {
             Ok(sig) => {
                 println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
                 println!("{:?}", sig);
@@ -69,7 +69,7 @@ impl Miner {
             &ore::MINT_ADDRESS,
             &spl_token::id(),
         );
-        match self.send_and_confirm(&[ix]).await {
+        match self.send_and_confirm(&[ix], false).await {
             Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }
