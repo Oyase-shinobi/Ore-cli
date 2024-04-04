@@ -26,25 +26,9 @@ impl Miner {
 
         let mut stdout = stdout();
 
-        // Wait for mining to begin if necessary
-        loop {
-            std::thread::sleep(Duration::from_secs(1));
-            let now_unix_timestamp = Utc::now().timestamp();
-            let duration = START_AT - now_unix_timestamp;
-            let t = format_duration(duration);
-            stdout.write_all(b"\x1b[2J\x1b[3J\x1b[H").ok();
-            stdout
-                .write_all(format!("Waiting for mining to begin... {}\n", t).as_bytes())
-                .ok();
-            stdout.flush().ok();
-            if START_AT.le(&now_unix_timestamp) {
-                break;
-            }
-        }
-
         // Start mining loop
         loop {
-            // Find a valid hash.
+            // Fetch account state
             let treasury = get_treasury(self.cluster.clone()).await;
             let proof = get_proof(self.cluster.clone(), signer.pubkey()).await;
 
@@ -75,7 +59,6 @@ impl Miner {
                 if invalid_busses.len().eq(&(BUS_COUNT as usize)) {
                     // All busses are drained. Wait until next epoch.
                     std::thread::sleep(std::time::Duration::from_millis(1000));
-                    // All busses are empty, let;s start anew next time with fresh invalid_busses and bus_id
                     break 'submit;
                 }
                 if invalid_busses.contains(&bus_id) {
@@ -221,12 +204,4 @@ impl Miner {
         let r_solution = solution.lock().expect("Failed to get lock");
         *r_solution
     }
-}
-
-pub fn format_duration(seconds: i64) -> String {
-    let duration = ChronoDuration::try_seconds(seconds).unwrap();
-    let hours = duration.num_hours();
-    let minutes = duration.num_minutes() % 60;
-    let seconds = duration.num_seconds() % 60;
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
