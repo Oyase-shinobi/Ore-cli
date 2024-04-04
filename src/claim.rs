@@ -3,9 +3,16 @@ use std::str::FromStr;
 use ore::{self, state::Proof, utils::AccountDeserialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, compute_budget::ComputeBudgetInstruction,
+    signature::Signer,
+};
 
-use crate::{utils::proof_pubkey, Miner};
+use crate::{
+    cu_limits::{CU_LIMIT_ATA, CU_LIMIT_CLAIM},
+    utils::proof_pubkey,
+    Miner,
+};
 
 impl Miner {
     pub async fn claim(&self, cluster: String, beneficiary: Option<String>, amount: Option<f64>) {
@@ -33,8 +40,14 @@ impl Miner {
             }
         };
         let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
+        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
+        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
-        match self.send_and_confirm(&[ix], false).await {
+        println!("Submitting claim transaction...");
+        match self
+            .send_and_confirm(&[cu_limit_ix, cu_price_ix, ix], false)
+            .await
+        {
             Ok(sig) => {
                 println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
                 println!("{:?}", sig);
@@ -63,13 +76,19 @@ impl Miner {
         }
 
         // Sign and send transaction.
+        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_ATA);
+        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
             &signer.pubkey(),
             &signer.pubkey(),
             &ore::MINT_ADDRESS,
             &spl_token::id(),
         );
-        match self.send_and_confirm(&[ix], false).await {
+        println!("Creating token account {}...", token_account_pubkey);
+        match self
+            .send_and_confirm(&[cu_limit_ix, cu_price_ix, ix], false)
+            .await
+        {
             Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }
