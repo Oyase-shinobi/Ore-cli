@@ -1,6 +1,6 @@
 [package]
 name = "ore-cli"
-version = "0.4.1"
+version = "0.4.2"
 description = "A command line interface for the Ore program."
 license = "Apache-2.0"
 edition = "2021"
@@ -10,7 +10,7 @@ name = "ore"
 path = "src/main.rs"
 
 [features]
-default = ["admin"]
+default = []
 admin = []
 
 [dependencies]
