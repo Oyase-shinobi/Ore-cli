@@ -32,12 +32,13 @@ struct Args {
     #[arg(
         long,
         value_name = "NETWORK_URL",
-        help = "Network address of your RPC provider"
+        help = "Network address of your RPC provider",
+        global = true
     )]
     rpc: Option<String>,
 
     #[clap(
-        global(true),
+        global = true,
         short = 'C',
         long = "config",
         id = "PATH",
@@ -48,7 +49,8 @@ struct Args {
     #[arg(
         long,
         value_name = "KEYPAIR_FILEPATH",
-        help = "Filepath to keypair to use"
+        help = "Filepath to keypair to use",
+        global = true
     )]
     keypair: Option<String>,
 
@@ -56,7 +58,8 @@ struct Args {
         long,
         value_name = "MICROLAMPORTS",
         help = "Number of microlamports to pay as priority fee per transaction",
-        default_value = "0"
+        default_value = "0",
+        global = true
     )]
     priority_fee: u64,
 
