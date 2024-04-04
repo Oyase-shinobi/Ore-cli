@@ -32,8 +32,7 @@ struct Args {
     #[arg(
         long,
         value_name = "NETWORK_URL",
-        help = "Network address of your RPC provider",
-        default_value = "https://api.mainnet-beta.solana.com"
+        help = "Network address of your RPC provider"
     )]
     rpc: Option<String>,
 
