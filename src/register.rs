@@ -1,10 +1,7 @@
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    commitment_config::CommitmentConfig, compute_budget::ComputeBudgetInstruction,
-    signature::Signer,
-};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
 
-use crate::{cu_limits::CU_LIMIT_REGISTER, utils::proof_pubkey, Miner};
+use crate::{utils::proof_pubkey, Miner};
 
 impl Miner {
     pub async fn register(&self) {
@@ -19,10 +16,8 @@ impl Miner {
 
         // Sign and send transaction.
         println!("Generating challenge...");
-        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_REGISTER);
-        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::register(signer.pubkey());
-        self.send_and_confirm(&[cu_limit_ix, cu_price_ix, ix], false)
+        self.send_and_confirm(&[ix], true, false)
             .await
             .expect("Transaction failed");
     }

@@ -6,11 +6,12 @@ use std::{
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonblocking::rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
+    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
 };
 use solana_program::instruction::Instruction;
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    compute_budget::ComputeBudgetInstruction,
     signature::{Signature, Signer},
     transaction::Transaction,
 };
@@ -26,6 +27,7 @@ impl Miner {
     pub async fn send_and_confirm(
         &self,
         ixs: &[Instruction],
+        dynamic_cus: bool,
         skip_confirm: bool,
     ) -> ClientResult<Signature> {
         let mut stdout = stdout();
@@ -58,9 +60,40 @@ impl Miner {
             min_context_slot: Some(slot),
         };
         let mut tx = Transaction::new_with_payer(ixs, Some(&signer.pubkey()));
-        tx.sign(&[&signer], hash);
+
+        // Simulate if necessary
+        if dynamic_cus {
+            let sim_res = client
+                .simulate_transaction_with_config(
+                    &tx,
+                    RpcSimulateTransactionConfig {
+                        sig_verify: false,
+                        replace_recent_blockhash: false,
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        encoding: Some(UiTransactionEncoding::Base64),
+                        accounts: None,
+                        min_context_slot: Some(slot),
+                        inner_instructions: false,
+                    },
+                )
+                .await;
+            if let Ok(sim_res) = sim_res {
+                if let Some(units_consumed) = sim_res.value.units_consumed {
+                    let cu_budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(
+                        units_consumed as u32 + 1000,
+                    );
+                    let cu_price_ix =
+                        ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
+                    let mut final_ixs = vec![];
+                    final_ixs.extend_from_slice(&[cu_budget_ix, cu_price_ix]);
+                    final_ixs.extend_from_slice(ixs);
+                    tx = Transaction::new_with_payer(&final_ixs, Some(&signer.pubkey()));
+                }
+            }
+        }
 
         // Submit tx
+        tx.sign(&[&signer], hash);
         let mut sigs = vec![];
         let mut attempts = 0;
         loop {

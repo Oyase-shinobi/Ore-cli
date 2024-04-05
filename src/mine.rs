@@ -67,7 +67,7 @@ impl Miner {
                         let cu_price_ix =
                             ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
                         let reset_ix = ore::instruction::reset(signer.pubkey());
-                        self.send_and_confirm(&[cu_limit_ix, cu_price_ix, reset_ix], true)
+                        self.send_and_confirm(&[cu_limit_ix, cu_price_ix, reset_ix], false, true)
                             .await
                             .ok();
                     }
@@ -87,7 +87,7 @@ impl Miner {
                     nonce,
                 );
                 match self
-                    .send_and_confirm(&[cu_limit_ix, cu_price_ix, ix_mine], false)
+                    .send_and_confirm(&[cu_limit_ix, cu_price_ix, ix_mine], false, false)
                     .await
                 {
                     Ok(sig) => {
