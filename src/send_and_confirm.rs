@@ -151,7 +151,7 @@ impl Miner {
             stdout.flush().ok();
 
             // Retry
-            std::thread::sleep(Duration::from_millis(1000));
+            std::thread::sleep(Duration::from_millis(2000));
             (hash, slot) = client
                 .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
                 .await
