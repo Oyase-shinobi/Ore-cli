@@ -2424,7 +2424,7 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-cli"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "bincode",
  "bs58 0.5.1",
