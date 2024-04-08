@@ -222,7 +222,7 @@ impl Miner {
                     "0.00".to_string()
                 }
             }
-            Err(_) => "Err".to_string(),
+            Err(_) => "0.00".to_string(),
         }
     }
 }

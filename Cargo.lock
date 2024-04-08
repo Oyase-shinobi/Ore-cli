@@ -2424,7 +2424,7 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-cli"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "bincode",
  "bs58 0.5.1",
@@ -2447,9 +2447,9 @@ dependencies = [
 
 [[package]]
 name = "ore-program"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1438154357d3952bd1d8f683d7ded7977a317b86495031313a6a8799afe2ec8"
+checksum = "fcf2aafa6b257df0f423042e69eb7dd5dbc90a03f2469b986b14401dc6570246"
 dependencies = [
  "bs58 0.5.1",
  "bytemuck",
