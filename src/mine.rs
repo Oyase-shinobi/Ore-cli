@@ -53,7 +53,7 @@ impl Miner {
             println!("\n\nSubmitting hash for validation...");
             'submit: loop {
                 // Double check we're submitting for the right challenge
-                let proof_ = get_proof(self.cluster.clone(), signer.pubkey()).await;
+                let proof_ = get_proof(&self.rpc_client, signer.pubkey()).await;
                 if proof_.hash.ne(&proof.hash) {
                     println!("Hash already validated! An earlier transaction must have landed.");
                     break 'submit;
