@@ -8,7 +8,6 @@ use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{keccak::HASH_BYTES, program_memory::sol_memcmp, pubkey::Pubkey};
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     keccak::{hashv, Hash as KeccakHash},
     signature::Signer,
@@ -35,8 +34,8 @@ impl Miner {
         loop {
             // Fetch account state
             let balance = self.get_ore_display_balance().await;
-            let treasury = get_treasury(self.cluster.clone()).await;
-            let proof = get_proof(self.cluster.clone(), signer.pubkey()).await;
+            let treasury = get_treasury(&self.rpc_client).await;
+            let proof = get_proof(&self.rpc_client, signer.pubkey()).await;
             let rewards =
                 (proof.claimable_rewards as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
             let reward_rate =
@@ -56,7 +55,7 @@ impl Miner {
             println!("\n\nSubmitting hash for validation...");
             'submit: loop {
                 // Double check we're submitting for the right challenge
-                let proof_ = get_proof(self.cluster.clone(), signer.pubkey()).await;
+                let proof_ = get_proof(&self.rpc_client, signer.pubkey()).await;
                 if !self.validate_hash(
                     next_hash,
                     proof_.hash.into(),
@@ -69,8 +68,8 @@ impl Miner {
                 }
 
                 // Reset epoch, if needed
-                let treasury = get_treasury(self.cluster.clone()).await;
-                let clock = get_clock_account(self.cluster.clone()).await;
+                let treasury = get_treasury(&self.rpc_client).await;
+                let clock = get_clock_account(&self.rpc_client).await;
                 let threshold = treasury.last_reset_at.saturating_add(EPOCH_DURATION);
                 if clock.unix_timestamp.ge(&threshold) {
                     // There are a lot of miners right now, so randomly select into submitting tx
@@ -240,8 +239,7 @@ impl Miner {
     }
 
     pub async fn get_ore_display_balance(&self) -> String {
-        let client =
-            RpcClient::new_with_commitment(self.cluster.clone(), CommitmentConfig::confirmed());
+        let client = self.rpc_client.clone();
         let signer = self.signer();
         let token_account_address = spl_associated_token_account::get_associated_token_address(
             &signer.pubkey(),
