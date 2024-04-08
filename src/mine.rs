@@ -5,6 +5,8 @@ use std::{
 
 use ore::{self, state::Bus, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::{keccak::HASH_BYTES, program_memory::sol_memcmp, pubkey::Pubkey};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     keccak::{hashv, Hash as KeccakHash},
@@ -54,7 +56,13 @@ impl Miner {
             'submit: loop {
                 // Double check we're submitting for the right challenge
                 let proof_ = get_proof(&self.rpc_client, signer.pubkey()).await;
-                if proof_.hash.ne(&proof.hash) {
+                if !self.validate_hash(
+                    next_hash,
+                    proof_.hash.into(),
+                    signer.pubkey(),
+                    nonce,
+                    treasury.difficulty.into(),
+                ) {
                     println!("Hash already validated! An earlier transaction must have landed.");
                     break 'submit;
                 }
@@ -112,7 +120,7 @@ impl Miner {
         loop {
             let bus_id = rng.gen_range(0..BUS_COUNT);
             if let Ok(bus) = self.get_bus(bus_id).await {
-                if bus.rewards.gt(&reward_rate.saturating_mul(4)) {
+                if bus.rewards.gt(&reward_rate.saturating_mul(20)) {
                     return bus;
                 }
             }
@@ -204,6 +212,32 @@ impl Miner {
         *r_solution
     }
 
+    pub fn validate_hash(
+        &self,
+        hash: KeccakHash,
+        current_hash: KeccakHash,
+        signer: Pubkey,
+        nonce: u64,
+        difficulty: KeccakHash,
+    ) -> bool {
+        // Validate hash correctness
+        let hash_ = hashv(&[
+            current_hash.as_ref(),
+            signer.as_ref(),
+            nonce.to_le_bytes().as_slice(),
+        ]);
+        if sol_memcmp(hash.as_ref(), hash_.as_ref(), HASH_BYTES) != 0 {
+            return false;
+        }
+
+        // Validate hash difficulty
+        if hash.gt(&difficulty) {
+            return false;
+        }
+
+        true
+    }
+
     pub async fn get_ore_display_balance(&self) -> String {
         let client = self.rpc_client.clone();
         let signer = self.signer();
@@ -219,7 +253,7 @@ impl Miner {
                     "0.00".to_string()
                 }
             }
-            Err(_) => "Err".to_string(),
+            Err(_) => "0.00".to_string(),
         }
     }
 }
