@@ -1,4 +1,4 @@
-use ore::{state::Bus, utils::AccountDeserialize, BUS_ADDRESSES};
+use ore::{state::Bus, utils::AccountDeserialize, BUS_ADDRESSES, TOKEN_DECIMALS};
 use solana_client::client_error::Result;
 
 use crate::Miner;
@@ -10,7 +10,8 @@ impl Miner {
             let data = client.get_account_data(address).await.unwrap();
             match Bus::try_from_bytes(&data) {
                 Ok(bus) => {
-                    println!("Bus {}: {:} ORE", bus.id, bus.rewards);
+                    let rewards = (bus.rewards as f64) / 10f64.powf(TOKEN_DECIMALS as f64);
+                    println!("Bus {}: {:} ORE", bus.id, rewards);
                 }
                 Err(_) => {}
             }
