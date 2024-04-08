@@ -5,7 +5,6 @@ use std::{
 
 use ore::{self, state::Bus, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{keccak::HASH_BYTES, program_memory::sol_memcmp, pubkey::Pubkey};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
