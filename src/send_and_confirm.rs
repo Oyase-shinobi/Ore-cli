@@ -20,11 +20,11 @@ use crate::Miner;
 
 const RPC_RETRIES: usize = 0;
 const SIMULATION_RETRIES: usize = 4;
-const GATEWAY_RETRIES: usize = 4;
-const CONFIRM_RETRIES: usize = 4;
+const GATEWAY_RETRIES: usize = 150;
+const CONFIRM_RETRIES: usize = 1;
 
-const CONFIRM_DELAY: u64 = 5000;
-const GATEWAY_DELAY: u64 = 2000;
+const CONFIRM_DELAY: u64 = 0;
+const GATEWAY_DELAY: u64 = 300;
 
 impl Miner {
     pub async fn send_and_confirm(
@@ -47,16 +47,16 @@ impl Miner {
         }
 
         // Build tx
-        let (hash, slot) = client
+        let (_hash, slot) = client
             .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
             .await
             .unwrap();
         let send_cfg = RpcSendTransactionConfig {
-            skip_preflight: false,
-            preflight_commitment: Some(CommitmentLevel::Finalized),
+            skip_preflight: true,
+            preflight_commitment: Some(CommitmentLevel::Confirmed),
             encoding: Some(UiTransactionEncoding::Base64),
             max_retries: Some(RPC_RETRIES),
-            min_context_slot: Some(slot),
+            min_context_slot: None,
         };
         let mut tx = Transaction::new_with_payer(ixs, Some(&signer.pubkey()));
 
@@ -112,6 +112,12 @@ impl Miner {
                 });
             }
         }
+
+        // Update hash before sending transactions
+        let (hash, _slot) = client
+            .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
+            .await
+            .unwrap();
 
         // Submit tx
         tx.sign(&[&signer], hash);
