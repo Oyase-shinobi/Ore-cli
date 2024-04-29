@@ -18,7 +18,7 @@ impl Miner {
             self.signer().pubkey()
         };
         let proof = get_proof(&self.rpc_client, address).await;
-        let amount = (proof.claimable_rewards as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64);
+        let amount = (proof.balance as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64);
         println!("{:} ORE", amount);
     }
 }

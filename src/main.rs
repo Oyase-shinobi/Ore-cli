@@ -1,6 +1,6 @@
 mod balance;
 mod busses;
-mod claim;
+// mod claim;
 mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -8,11 +8,8 @@ mod mine;
 mod register;
 mod rewards;
 mod send_and_confirm;
-mod treasury;
 #[cfg(feature = "admin")]
 mod update_admin;
-#[cfg(feature = "admin")]
-mod update_difficulty;
 mod utils;
 
 use std::sync::Arc;
@@ -82,14 +79,10 @@ enum Commands {
     #[command(about = "Mine Ore using local compute")]
     Mine(MineArgs),
 
-    #[command(about = "Claim available mining rewards")]
-    Claim(ClaimArgs),
-
+    // #[command(about = "Claim available mining rewards")]
+    // Claim(ClaimArgs),
     #[command(about = "Fetch your balance of unclaimed mining rewards")]
     Rewards(RewardsArgs),
-
-    #[command(about = "Fetch the treasury account and balance")]
-    Treasury(TreasuryArgs),
 
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
@@ -98,10 +91,6 @@ enum Commands {
     #[cfg(feature = "admin")]
     #[command(about = "Update the program admin authority")]
     UpdateAdmin(UpdateAdminArgs),
-
-    #[cfg(feature = "admin")]
-    #[command(about = "Update the mining difficulty")]
-    UpdateDifficulty(UpdateDifficultyArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -139,25 +128,22 @@ struct MineArgs {
     threads: u64,
 }
 
-#[derive(Parser, Debug)]
-struct TreasuryArgs {}
+// #[derive(Parser, Debug)]
+// struct ClaimArgs {
+//     #[arg(
+//         // long,
+//         value_name = "AMOUNT",
+//         help = "The amount of rewards to claim. Defaults to max."
+//     )]
+//     amount: Option<f64>,
 
-#[derive(Parser, Debug)]
-struct ClaimArgs {
-    #[arg(
-        // long,
-        value_name = "AMOUNT",
-        help = "The amount of rewards to claim. Defaults to max."
-    )]
-    amount: Option<f64>,
-
-    #[arg(
-        // long,
-        value_name = "TOKEN_ACCOUNT_ADDRESS",
-        help = "Token account to receive mining rewards."
-    )]
-    beneficiary: Option<String>,
-}
+//     #[arg(
+//         // long,
+//         value_name = "TOKEN_ACCOUNT_ADDRESS",
+//         help = "Token account to receive mining rewards."
+//     )]
+//     beneficiary: Option<String>,
+// }
 
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
@@ -168,10 +154,6 @@ struct InitializeArgs {}
 struct UpdateAdminArgs {
     new_admin: String,
 }
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct UpdateDifficultyArgs {}
 
 #[tokio::main]
 async fn main() {
@@ -211,15 +193,12 @@ async fn main() {
         Commands::Rewards(args) => {
             miner.rewards(args.address).await;
         }
-        Commands::Treasury(_) => {
-            miner.treasury().await;
-        }
         Commands::Mine(args) => {
             miner.mine(args.threads).await;
         }
-        Commands::Claim(args) => {
-            miner.claim(args.beneficiary, args.amount).await;
-        }
+        // Commands::Claim(args) => {
+        //     miner.claim(args.beneficiary, args.amount).await;
+        // }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {
             miner.initialize().await;
@@ -228,15 +207,15 @@ async fn main() {
         Commands::UpdateAdmin(args) => {
             miner.update_admin(args.new_admin).await;
         }
-        #[cfg(feature = "admin")]
-        Commands::UpdateDifficulty(_) => {
-            miner.update_difficulty().await;
-        }
     }
 }
 
 impl Miner {
-    pub fn new(rpc_client: Arc<RpcClient>, priority_fee: u64, keypair_filepath: Option<String>) -> Self {
+    pub fn new(
+        rpc_client: Arc<RpcClient>,
+        priority_fee: u64,
+        keypair_filepath: Option<String>,
+    ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
