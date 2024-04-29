@@ -1,27 +1,27 @@
-use std::{fs::File, io::Read, time::Instant};
+use std::{
+    fs::File,
+    io::Read,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 use ore::{self, state::Proof, utils::AccountDeserialize, BUS_ADDRESSES, BUS_COUNT};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::{signer::Signer, transaction::Transaction};
+use solana_sdk::{
+    compute_budget::ComputeBudgetInstruction, signer::Signer, transaction::Transaction,
+};
 
 use crate::{utils::proof_pubkey, Miner};
 
 impl Miner {
-    pub async fn mine(&self, threads: u64) {
+    pub async fn mine(&self, threads: u64, buffer_time: u64) {
         // Register, if needed.
         let signer = self.signer();
         self.register().await;
 
-        // Read noise file
-        let mut file = File::open("noise.txt").unwrap();
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).unwrap();
-        let noise = buffer.as_slice();
-
         loop {
             // Run drillx
-            let nonce = self.find_hash(signer.pubkey(), noise).await;
+            let nonce = self.find_hash(signer.pubkey(), buffer_time).await;
 
             // Submit most difficult hash
             // TODO Set compute budget and price
@@ -30,10 +30,11 @@ impl Miner {
                 .get_latest_blockhash()
                 .await
                 .expect("failed to get blockhash");
+            let cu_budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(500_000);
             let reset_ix = ore::instruction::reset(signer.pubkey());
             let mine_ix = ore::instruction::mine(signer.pubkey(), find_bus(), nonce);
             let tx = Transaction::new_signed_with_payer(
-                &[reset_ix, mine_ix],
+                &[cu_budget_ix, reset_ix, mine_ix],
                 Some(&signer.pubkey()),
                 &[&signer],
                 blockhash,
@@ -44,26 +45,34 @@ impl Miner {
     }
 
     // TODO Parallelize search
-    async fn find_hash(&self, signer: Pubkey, noise: &[u8]) -> u64 {
+    async fn find_hash(&self, signer: Pubkey, buffer_time: u64) -> u64 {
         let timer = Instant::now();
         let proof = self.get_proof(signer).await;
-        let cutoff_time = get_cutoff(proof);
-        let mut difficulty = 0;
+        let cutoff_time = get_cutoff(proof, buffer_time);
+        let mut best_difficulty = 0;
         let mut best_nonce = 0;
         let mut nonce = 0u64;
-        println!("Mining");
+        println!("Mining {} sec", cutoff_time);
         loop {
-            let hx = drillx::hash(&proof.challenge, &nonce.to_le_bytes(), noise);
-            let d = drillx::difficulty(hx);
-            if d.gt(&difficulty) {
-                difficulty = d;
+            let hx = drillx::hash(&proof.challenge, &nonce.to_le_bytes());
+            let difficulty = drillx::difficulty(hx);
+            if difficulty.gt(&best_difficulty) {
+                best_difficulty = difficulty;
                 best_nonce = nonce;
             }
-            if timer.elapsed().as_secs().ge(&cutoff_time) {
-                break;
+            if (timer.elapsed().as_secs() as i64).ge(&cutoff_time) {
+                if best_difficulty.gt(&8) {
+                    // Min difficulty requirement
+                    break;
+                }
             }
             if nonce % 10_000 == 0 {
-                println!("{}", nonce);
+                println!(
+                    "Time: {} sec – Nonce: {} – Difficulty: {}",
+                    timer.elapsed().as_secs(),
+                    nonce,
+                    best_difficulty
+                );
             }
             nonce += 1;
         }
@@ -81,12 +90,16 @@ impl Miner {
     }
 }
 
-fn get_cutoff(proof: Proof) -> u64 {
-    const BUFFER_TIME: i64 = 10;
+fn get_cutoff(proof: Proof, buffer_time: u64) -> i64 {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Failed to get time")
+        .as_secs() as i64;
     proof
         .last_hash_at
         .saturating_add(60)
-        .saturating_sub(BUFFER_TIME) as u64
+        .saturating_sub(buffer_time as i64)
+        .saturating_sub(now)
 }
 
 fn find_bus() -> Pubkey {

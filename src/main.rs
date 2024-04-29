@@ -126,6 +126,15 @@ struct MineArgs {
         default_value = "1"
     )]
     threads: u64,
+
+    #[arg(
+        long,
+        short,
+        value_name = "SECONDS",
+        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
+        default_value = "10"
+    )]
+    buffer_time: u64,
 }
 
 // #[derive(Parser, Debug)]
@@ -194,7 +203,7 @@ async fn main() {
             miner.rewards(args.address).await;
         }
         Commands::Mine(args) => {
-            miner.mine(args.threads).await;
+            miner.mine(args.threads, args.buffer_time).await;
         }
         // Commands::Claim(args) => {
         //     miner.claim(args.beneficiary, args.amount).await;

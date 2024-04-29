@@ -1355,7 +1355,6 @@ dependencies = [
 [[package]]
 name = "drillx"
 version = "0.1.0"
-source = "git+https://github.com/hardhatchad/drillx?branch=master#9b32322f9b9298dc1067b3ce9397ca5691c239b0"
 dependencies = [
  "enum_dispatch",
  "num-traits",
