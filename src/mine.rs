@@ -61,7 +61,7 @@ impl Miner {
                 best_nonce = nonce;
             }
             if (timer.elapsed().as_secs() as i64).ge(&cutoff_time) {
-                if best_difficulty.gt(&8) {
+                if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
                     // Min difficulty requirement
                     break;
                 }
@@ -102,6 +102,7 @@ fn get_cutoff(proof: Proof, buffer_time: u64) -> i64 {
         .saturating_sub(now)
 }
 
+// TODO Better strategy (avoid draining bus)
 fn find_bus() -> Pubkey {
     let i = rand::thread_rng().gen_range(0..BUS_COUNT);
     BUS_ADDRESSES[i]

@@ -81,7 +81,7 @@ enum Commands {
 
     // #[command(about = "Claim available mining rewards")]
     // Claim(ClaimArgs),
-    #[command(about = "Fetch your balance of unclaimed mining rewards")]
+    #[command(about = "Fetch the reward rate for each difficulty level")]
     Rewards(RewardsArgs),
 
     #[cfg(feature = "admin")]
@@ -107,14 +107,7 @@ struct BalanceArgs {
 struct BussesArgs {}
 
 #[derive(Parser, Debug)]
-struct RewardsArgs {
-    #[arg(
-        // long,
-        value_name = "ADDRESS",
-        help = "The address of the account to fetch the rewards balance of"
-    )]
-    pub address: Option<String>,
-}
+struct RewardsArgs {}
 
 #[derive(Parser, Debug)]
 struct MineArgs {
@@ -200,7 +193,7 @@ async fn main() {
             miner.busses().await;
         }
         Commands::Rewards(args) => {
-            miner.rewards(args.address).await;
+            miner.rewards().await;
         }
         Commands::Mine(args) => {
             miner.mine(args.threads, args.buffer_time).await;

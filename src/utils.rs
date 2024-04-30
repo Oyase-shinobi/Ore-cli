@@ -1,9 +1,9 @@
 use cached::proc_macro::cached;
 use ore::{
     self,
-    state::{Proof, Treasury},
+    state::{Config, Proof, Treasury},
     utils::AccountDeserialize,
-    MINT_ADDRESS, PROOF, TREASURY_ADDRESS,
+    CONFIG_ADDRESS, MINT_ADDRESS, PROOF, TREASURY_ADDRESS,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{pubkey::Pubkey, sysvar};
@@ -16,6 +16,14 @@ pub async fn get_treasury(client: &RpcClient) -> Treasury {
         .await
         .expect("Failed to get treasury account");
     *Treasury::try_from_bytes(&data).expect("Failed to parse treasury account")
+}
+
+pub async fn get_config(client: &RpcClient) -> Config {
+    let data = client
+        .get_account_data(&CONFIG_ADDRESS)
+        .await
+        .expect("Failed to get config account");
+    *Config::try_from_bytes(&data).expect("Failed to parse config account")
 }
 
 pub async fn get_proof(client: &RpcClient, authority: Pubkey) -> Proof {
