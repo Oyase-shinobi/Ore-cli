@@ -1,10 +1,16 @@
 use std::{
     fs::File,
     io::Read,
+    sync::{
+        atomic::{AtomicU32, AtomicU64, Ordering},
+        Arc,
+    },
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use ore::{self, state::Proof, utils::AccountDeserialize, BUS_ADDRESSES, BUS_COUNT};
+use ore::{
+    self, state::Proof, utils::AccountDeserialize, BUS_ADDRESSES, BUS_COUNT, MIN_DIFFICULTY,
+};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{
@@ -21,7 +27,9 @@ impl Miner {
 
         loop {
             // Run drillx
-            let nonce = self.find_hash(signer.pubkey(), buffer_time).await;
+            let nonce = self
+                .find_hash_par(signer.pubkey(), buffer_time, threads)
+                .await;
 
             // Submit most difficult hash
             // TODO Set compute budget and price
@@ -44,38 +52,62 @@ impl Miner {
         }
     }
 
-    // TODO Parallelize search
-    async fn find_hash(&self, signer: Pubkey, buffer_time: u64) -> u64 {
-        let timer = Instant::now();
+    async fn find_hash_par(&self, signer: Pubkey, buffer_time: u64, threads: u64) -> u64 {
         let proof = self.get_proof(signer).await;
         let cutoff_time = get_cutoff(proof, buffer_time);
-        let mut best_difficulty = 0;
+        let handles: Vec<_> = (0..threads)
+            .map(|i| {
+                std::thread::spawn({
+                    let proof = proof.clone();
+                    move || {
+                        let timer = Instant::now();
+                        let mut nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
+                        let mut best_nonce = nonce;
+                        let mut best_difficulty = 0;
+                        loop {
+                            // Create hash
+                            let hx = drillx::hash(&proof.challenge, &nonce.to_le_bytes());
+                            let difficulty = drillx::difficulty(hx);
+
+                            // Check difficulty
+                            if difficulty.gt(&best_difficulty) {
+                                best_nonce = nonce;
+                                best_difficulty = difficulty;
+                            }
+
+                            // Exit if time has elapsed
+                            if nonce % 1000 == 0 {
+                                if (timer.elapsed().as_secs() as i64).ge(&cutoff_time) {
+                                    if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
+                                        // Mine until min difficulty has been met
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Increment nonce
+                            nonce += 1;
+                        }
+
+                        // Return the best nonce
+                        (best_nonce, best_difficulty)
+                    }
+                })
+            })
+            .collect();
+
+        // Join handles and return best nonce
         let mut best_nonce = 0;
-        let mut nonce = 0u64;
-        println!("Mining {} sec", cutoff_time);
-        loop {
-            let hx = drillx::hash(&proof.challenge, &nonce.to_le_bytes());
-            let difficulty = drillx::difficulty(hx);
-            if difficulty.gt(&best_difficulty) {
-                best_difficulty = difficulty;
-                best_nonce = nonce;
-            }
-            if (timer.elapsed().as_secs() as i64).ge(&cutoff_time) {
-                if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
-                    // Min difficulty requirement
-                    break;
+        let mut best_difficulty = 0;
+        for h in handles {
+            if let Ok((nonce, difficulty)) = h.join() {
+                if difficulty > best_difficulty {
+                    best_difficulty = difficulty;
+                    best_nonce = nonce;
                 }
             }
-            if nonce % 10_000 == 0 {
-                println!(
-                    "Time: {} sec – Nonce: {} – Difficulty: {}",
-                    timer.elapsed().as_secs(),
-                    nonce,
-                    best_difficulty
-                );
-            }
-            nonce += 1;
         }
+
         best_nonce
     }
 
