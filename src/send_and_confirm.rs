@@ -1,14 +1,11 @@
-use std::{
-    io::{stdout, Write},
-    time::Duration,
-};
+use std::time::Duration;
 
-use logfather::{error, info};
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_config::RpcSendTransactionConfig,
 };
 use solana_program::instruction::Instruction;
+use solana_rpc_client::spinner;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
     compute_budget::ComputeBudgetInstruction,
@@ -39,7 +36,7 @@ impl Miner {
         compute_budget: ComputeBudget,
         skip_confirm: bool,
     ) -> ClientResult<Signature> {
-        let mut stdout = stdout();
+        let progress_bar = spinner::new_progress_bar();
         let signer = self.signer();
         let client = self.rpc_client.clone();
 
@@ -139,11 +136,12 @@ impl Miner {
         tx.sign(&[&signer], hash);
         let mut attempts = 0;
         loop {
+            progress_bar.set_message("Submitting transaction...");
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
                     // Skip confirm
                     if skip_confirm {
-                        info!("{}", sig);
+                        progress_bar.finish_with_message(format!("Sent: {}", sig));
                         return Ok(sig);
                     }
 
@@ -155,14 +153,21 @@ impl Miner {
                                 for status in signature_statuses.value {
                                     if let Some(status) = status {
                                         if let Some(err) = status.err {
-                                            error!("{}", err);
+                                            progress_bar.set_message(format!("Error: {}", err));
+                                            return Err(ClientError {
+                                                request: None,
+                                                kind: ClientErrorKind::Custom(err.to_string()),
+                                            });
                                         }
                                         if let Some(confirmation) = status.confirmation_status {
                                             match confirmation {
                                                 TransactionConfirmationStatus::Processed => {}
                                                 TransactionConfirmationStatus::Confirmed
                                                 | TransactionConfirmationStatus::Finalized => {
-                                                    info!("Tx: {}", sig);
+                                                    progress_bar.finish_with_message(format!(
+                                                        "Confirmed: {}",
+                                                        sig
+                                                    ));
                                                     return Ok(sig);
                                                 }
                                             }
@@ -173,7 +178,8 @@ impl Miner {
 
                             // Handle confirmation errors
                             Err(err) => {
-                                error!("{}", err.kind().to_string());
+                                progress_bar
+                                    .set_message(format!("Error: {}", err.kind().to_string()));
                             }
                         }
                     }
@@ -181,12 +187,11 @@ impl Miner {
 
                 // Handle submit errors
                 Err(err) => {
-                    error!("{}", err.kind().to_string());
+                    progress_bar.set_message(format!("Error: {}", err.kind().to_string()));
                 }
             }
 
             // Retry
-            stdout.flush().ok();
             std::thread::sleep(Duration::from_millis(GATEWAY_DELAY));
             attempts += 1;
             if attempts > GATEWAY_RETRIES {

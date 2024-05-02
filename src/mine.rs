@@ -1,9 +1,13 @@
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
-use logfather::{info, trace};
+use logfather::{info, warn};
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
+use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
 
 use crate::{
@@ -34,13 +38,22 @@ impl Miner {
     }
 
     async fn find_hash_par(&self, signer: Pubkey, buffer_time: u64, threads: u64) -> u64 {
+        // Check num threads
+        self.check_num_cores(threads);
+
+        // Fetch data
         let proof = get_proof(&self.rpc_client, signer).await;
-        info!("Stake balance: {} ORE", amount_u64_to_string(proof.balance));
+        println!("Stake balance: {} ORE", amount_u64_to_string(proof.balance));
         let cutoff_time = get_cutoff(proof, buffer_time);
+
+        // Dispatch job to each thread
+        let progress_bar = Arc::new(spinner::new_progress_bar());
+        progress_bar.set_message("Mining...");
         let handles: Vec<_> = (0..threads)
             .map(|i| {
                 std::thread::spawn({
                     let proof = proof.clone();
+                    let progress_bar = progress_bar.clone();
                     move || {
                         let timer = Instant::now();
                         let first_nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
@@ -67,15 +80,12 @@ impl Miner {
                                         // Mine until min difficulty has been met
                                         break;
                                     }
-                                } else {
-                                    trace!(
-                                        "(Core {}) Hashes searched: {} – Best difficulty: {} – Time remaining: {} sec",
-                                        i,
-                                        nonce.saturating_sub(first_nonce),
-                                        best_difficulty,
+                                } else if i == 0 {
+                                    progress_bar.set_message(format!(
+                                        "Mining... ({} sec remaining)",
                                         cutoff_time
                                             .saturating_sub(timer.elapsed().as_secs() as i64),
-                                    );
+                                    ));
                                 }
                             }
 
@@ -104,13 +114,25 @@ impl Miner {
             }
         }
 
-        info!(
+        // Update log
+        progress_bar.finish_with_message(format!(
             "Best hash: {} (difficulty: {})",
             bs58::encode(best_hash).into_string(),
             best_difficulty
-        );
+        ));
 
         best_nonce
+    }
+
+    fn check_num_cores(&self, threads: u64) {
+        // Check num threads
+        let num_cores = num_cpus::get() as u64;
+        if threads.gt(&num_cores) {
+            warn!(
+                "Number of threads ({}) exceeds available cores ({})",
+                threads, num_cores
+            );
+        }
     }
 }
 
