@@ -1,6 +1,6 @@
 mod balance;
 mod busses;
-// mod claim;
+mod claim;
 mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -8,6 +8,7 @@ mod mine;
 mod register;
 mod rewards;
 mod send_and_confirm;
+mod stake;
 #[cfg(feature = "admin")]
 mod update_admin;
 mod utils;
@@ -79,8 +80,9 @@ enum Commands {
     #[command(about = "Mine Ore using local compute")]
     Mine(MineArgs),
 
-    // #[command(about = "Claim available mining rewards")]
-    // Claim(ClaimArgs),
+    #[command(about = "Claim available mining rewards")]
+    Claim(ClaimArgs),
+
     #[command(about = "Fetch the reward rate for each difficulty level")]
     Rewards(RewardsArgs),
 
@@ -130,22 +132,22 @@ struct MineArgs {
     buffer_time: u64,
 }
 
-// #[derive(Parser, Debug)]
-// struct ClaimArgs {
-//     #[arg(
-//         // long,
-//         value_name = "AMOUNT",
-//         help = "The amount of rewards to claim. Defaults to max."
-//     )]
-//     amount: Option<f64>,
+#[derive(Parser, Debug)]
+struct ClaimArgs {
+    #[arg(
+        long,
+        value_name = "AMOUNT",
+        help = "The amount of rewards to claim. Defaults to max."
+    )]
+    amount: Option<f64>,
 
-//     #[arg(
-//         // long,
-//         value_name = "TOKEN_ACCOUNT_ADDRESS",
-//         help = "Token account to receive mining rewards."
-//     )]
-//     beneficiary: Option<String>,
-// }
+    #[arg(
+        long,
+        value_name = "TOKEN_ACCOUNT_ADDRESS",
+        help = "Token account to receive mining rewards."
+    )]
+    beneficiary: Option<String>,
+}
 
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
@@ -192,15 +194,15 @@ async fn main() {
         Commands::Busses(_) => {
             miner.busses().await;
         }
-        Commands::Rewards(args) => {
+        Commands::Rewards(_) => {
             miner.rewards().await;
         }
         Commands::Mine(args) => {
             miner.mine(args.threads, args.buffer_time).await;
         }
-        // Commands::Claim(args) => {
-        //     miner.claim(args.beneficiary, args.amount).await;
-        // }
+        Commands::Claim(args) => {
+            miner.claim(args.beneficiary, args.amount).await;
+        }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {
             miner.initialize().await;

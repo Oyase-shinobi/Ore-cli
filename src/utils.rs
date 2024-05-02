@@ -10,7 +10,7 @@ use solana_program::{pubkey::Pubkey, sysvar};
 use solana_sdk::clock::Clock;
 use spl_associated_token_account::get_associated_token_address;
 
-pub async fn get_treasury(client: &RpcClient) -> Treasury {
+pub async fn _get_treasury(client: &RpcClient) -> Treasury {
     let data = client
         .get_account_data(&TREASURY_ADDRESS)
         .await
@@ -35,12 +35,24 @@ pub async fn get_proof(client: &RpcClient, authority: Pubkey) -> Proof {
     *Proof::try_from_bytes(&data).expect("Failed to parse miner account")
 }
 
-pub async fn get_clock_account(client: &RpcClient) -> Clock {
+pub async fn _get_clock(client: &RpcClient) -> Clock {
     let data = client
         .get_account_data(&sysvar::clock::ID)
         .await
         .expect("Failed to get miner account");
     bincode::deserialize::<Clock>(&data).expect("Failed to deserialize clock")
+}
+
+pub fn amount_u64_to_string(amount: u64) -> String {
+    amount_u64_to_f64(amount).to_string()
+}
+
+pub fn amount_u64_to_f64(amount: u64) -> f64 {
+    (amount as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64)
+}
+
+pub fn amount_f64_to_u64(amount: f64) -> u64 {
+    (amount * 10f64.powf(ore::TOKEN_DECIMALS as f64)) as u64
 }
 
 #[cached]

@@ -4,7 +4,11 @@ use ore::{self, state::Proof, utils::AccountDeserialize};
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{compute_budget::ComputeBudgetInstruction, signature::Signer};
 
-use crate::{cu_limits::CU_LIMIT_CLAIM, utils::proof_pubkey, Miner};
+use crate::{
+    cu_limits::CU_LIMIT_CLAIM,
+    utils::{amount_f64_to_u64, amount_u64_to_f64, proof_pubkey},
+    Miner,
+};
 
 impl Miner {
     pub async fn claim(&self, beneficiary: Option<String>, amount: Option<f64>) {
@@ -18,12 +22,12 @@ impl Miner {
             None => self.initialize_ata().await,
         };
         let amount = if let Some(amount) = amount {
-            (amount * 10f64.powf(ore::TOKEN_DECIMALS as f64)) as u64
+            amount_f64_to_u64(amount)
         } else {
             match client.get_account(&proof_pubkey(pubkey)).await {
                 Ok(proof_account) => {
                     let proof = Proof::try_from_bytes(&proof_account.data).unwrap();
-                    proof.claimable_rewards
+                    proof.balance
                 }
                 Err(err) => {
                     println!("Error looking up claimable rewards: {:?}", err);
@@ -31,7 +35,7 @@ impl Miner {
                 }
             }
         };
-        let amountf = (amount as f64) / (10f64.powf(ore::TOKEN_DECIMALS as f64));
+        let amountf = amount_u64_to_f64(amount);
         let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
         let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);

@@ -5,12 +5,11 @@ use std::{
 
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
+    rpc_config::RpcSendTransactionConfig,
 };
 use solana_program::instruction::Instruction;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
-    compute_budget::ComputeBudgetInstruction,
     signature::{Signature, Signer},
     transaction::Transaction,
 };
@@ -19,7 +18,7 @@ use solana_transaction_status::{TransactionConfirmationStatus, UiTransactionEnco
 use crate::Miner;
 
 const RPC_RETRIES: usize = 0;
-const SIMULATION_RETRIES: usize = 4;
+const _SIMULATION_RETRIES: usize = 4;
 const GATEWAY_RETRIES: usize = 150;
 const CONFIRM_RETRIES: usize = 1;
 
@@ -30,7 +29,7 @@ impl Miner {
     pub async fn send_and_confirm(
         &self,
         ixs: &[Instruction],
-        dynamic_cus: bool,
+        _dynamic_cus: bool,
         skip_confirm: bool,
     ) -> ClientResult<Signature> {
         let mut stdout = stdout();
@@ -47,7 +46,7 @@ impl Miner {
         }
 
         // Build tx
-        let (_hash, slot) = client
+        let (_hash, _slot) = client
             .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
             .await
             .unwrap();

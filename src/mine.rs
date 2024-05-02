@@ -1,23 +1,13 @@
-use std::{
-    fs::File,
-    io::Read,
-    sync::{
-        atomic::{AtomicU32, AtomicU64, Ordering},
-        Arc,
-    },
-    time::{Instant, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use ore::{
-    self, state::Proof, utils::AccountDeserialize, BUS_ADDRESSES, BUS_COUNT, MIN_DIFFICULTY,
-};
+use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction, signer::Signer, transaction::Transaction,
 };
 
-use crate::{utils::proof_pubkey, Miner};
+use crate::{utils::get_proof, Miner};
 
 impl Miner {
     pub async fn mine(&self, threads: u64, buffer_time: u64) {
@@ -31,18 +21,19 @@ impl Miner {
                 .find_hash_par(signer.pubkey(), buffer_time, threads)
                 .await;
 
+            // TODO Submit through send_and_confirm flow
             // Submit most difficult hash
-            // TODO Set compute budget and price
             let blockhash = self
                 .rpc_client
                 .get_latest_blockhash()
                 .await
                 .expect("failed to get blockhash");
             let cu_budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(500_000);
+            let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
             let reset_ix = ore::instruction::reset(signer.pubkey());
             let mine_ix = ore::instruction::mine(signer.pubkey(), find_bus(), nonce);
             let tx = Transaction::new_signed_with_payer(
-                &[cu_budget_ix, reset_ix, mine_ix],
+                &[cu_budget_ix, cu_price_ix, reset_ix, mine_ix],
                 Some(&signer.pubkey()),
                 &[&signer],
                 blockhash,
@@ -53,7 +44,7 @@ impl Miner {
     }
 
     async fn find_hash_par(&self, signer: Pubkey, buffer_time: u64, threads: u64) -> u64 {
-        let proof = self.get_proof(signer).await;
+        let proof = get_proof(&self.rpc_client, signer).await;
         let cutoff_time = get_cutoff(proof, buffer_time);
         let handles: Vec<_> = (0..threads)
             .map(|i| {
@@ -109,16 +100,6 @@ impl Miner {
         }
 
         best_nonce
-    }
-
-    async fn get_proof(&self, signer: Pubkey) -> Proof {
-        let proof_address = proof_pubkey(signer);
-        let client = self.rpc_client.clone();
-        let data = client
-            .get_account_data(&proof_address)
-            .await
-            .expect("failed to get account");
-        *Proof::try_from_bytes(&data).expect("failed to parse")
     }
 }
 
