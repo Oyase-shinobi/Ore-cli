@@ -1,5 +1,6 @@
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use logfather::info;
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
@@ -39,7 +40,7 @@ impl Miner {
                 blockhash,
             );
             let res = self.rpc_client.send_and_confirm_transaction(&tx).await;
-            println!("{:?}", res);
+            info!("{:?}", res);
         }
     }
 
