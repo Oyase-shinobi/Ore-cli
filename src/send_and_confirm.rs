@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use logfather::{error, info};
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_config::RpcSendTransactionConfig,
@@ -10,6 +11,7 @@ use solana_client::{
 use solana_program::instruction::Instruction;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
+    compute_budget::ComputeBudgetInstruction,
     signature::{Signature, Signer},
     transaction::Transaction,
 };
@@ -25,31 +27,46 @@ const CONFIRM_RETRIES: usize = 1;
 const CONFIRM_DELAY: u64 = 0;
 const GATEWAY_DELAY: u64 = 300;
 
+pub enum ComputeBudget {
+    Dynamic,
+    Fixed(u32),
+}
+
 impl Miner {
     pub async fn send_and_confirm(
         &self,
         ixs: &[Instruction],
-        _dynamic_cus: bool,
+        compute_budget: ComputeBudget,
         skip_confirm: bool,
     ) -> ClientResult<Signature> {
         let mut stdout = stdout();
         let signer = self.signer();
         let client = self.rpc_client.clone();
 
-        // Return error if balance is zero
-        let balance = client.get_balance(&signer.pubkey()).await.unwrap();
-        if balance <= 0 {
-            return Err(ClientError {
-                request: None,
-                kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
-            });
+        // Return error, if balance is zero
+        if let Ok(balance) = client.get_balance(&signer.pubkey()).await {
+            if balance <= 0 {
+                return Err(ClientError {
+                    request: None,
+                    kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
+                });
+            }
         }
 
+        // Set compute units
+        let mut final_ixs = vec![];
+        match compute_budget {
+            ComputeBudget::Dynamic => {} // TODO simulate
+            ComputeBudget::Fixed(cus) => {
+                final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(cus))
+            }
+        }
+        final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
+            self.priority_fee,
+        ));
+        final_ixs.extend_from_slice(ixs);
+
         // Build tx
-        let (_hash, _slot) = client
-            .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
-            .await
-            .unwrap();
         let send_cfg = RpcSendTransactionConfig {
             skip_preflight: true,
             preflight_commitment: Some(CommitmentLevel::Confirmed),
@@ -57,7 +74,7 @@ impl Miner {
             max_retries: Some(RPC_RETRIES),
             min_context_slot: None,
         };
-        let mut tx = Transaction::new_with_payer(ixs, Some(&signer.pubkey()));
+        let mut tx = Transaction::new_with_payer(&final_ixs, Some(&signer.pubkey()));
 
         // Simulate tx
         // let mut sim_attempts = 0;
@@ -120,44 +137,35 @@ impl Miner {
 
         // Submit tx
         tx.sign(&[&signer], hash);
-        // let mut sigs = vec![];
         let mut attempts = 0;
         loop {
-            println!("Attempt: {:?}", attempts);
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
-                    println!("{:?}", sig);
-                    // sigs.push(sig);
-
-                    // Confirm tx
+                    // Skip confirm
                     if skip_confirm {
+                        info!("{}", sig);
                         return Ok(sig);
                     }
+
+                    // Do confirmations
                     for _ in 0..CONFIRM_RETRIES {
                         std::thread::sleep(Duration::from_millis(CONFIRM_DELAY));
                         match client.get_signature_statuses(&[sig]).await {
                             Ok(signature_statuses) => {
-                                println!("Confirmation: {:?}", signature_statuses.value[0]);
-                                for signature_status in signature_statuses.value {
-                                    if let Some(signature_status) = signature_status.as_ref() {
-                                        if signature_status.confirmation_status.is_some() {
-                                            let current_commitment = signature_status
-                                                .confirmation_status
-                                                .as_ref()
-                                                .unwrap();
-                                            match current_commitment {
+                                for status in signature_statuses.value {
+                                    if let Some(status) = status {
+                                        if let Some(err) = status.err {
+                                            error!("{}", err);
+                                        }
+                                        if let Some(confirmation) = status.confirmation_status {
+                                            match confirmation {
                                                 TransactionConfirmationStatus::Processed => {}
                                                 TransactionConfirmationStatus::Confirmed
                                                 | TransactionConfirmationStatus::Finalized => {
-                                                    println!("Transaction landed!");
-                                                    std::thread::sleep(Duration::from_millis(
-                                                        GATEWAY_DELAY,
-                                                    ));
+                                                    info!("Tx: {}", sig);
                                                     return Ok(sig);
                                                 }
                                             }
-                                        } else {
-                                            println!("No status");
                                         }
                                     }
                                 }
@@ -165,16 +173,15 @@ impl Miner {
 
                             // Handle confirmation errors
                             Err(err) => {
-                                println!("{:?}", err.kind().to_string());
+                                error!("{}", err.kind().to_string());
                             }
                         }
                     }
-                    println!("Transaction did not land");
                 }
 
                 // Handle submit errors
                 Err(err) => {
-                    println!("{:?}", err.kind().to_string());
+                    error!("{}", err.kind().to_string());
                 }
             }
 

@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use ore::{self, state::Proof, utils::AccountDeserialize};
 use solana_program::pubkey::Pubkey;
-use solana_sdk::{compute_budget::ComputeBudgetInstruction, signature::Signer};
+use solana_sdk::signature::Signer;
 
 use crate::{
     cu_limits::CU_LIMIT_CLAIM,
+    send_and_confirm::ComputeBudget,
     utils::{amount_f64_to_u64, amount_u64_to_f64, proof_pubkey},
     Miner,
 };
@@ -36,12 +37,12 @@ impl Miner {
             }
         };
         let amountf = amount_u64_to_f64(amount);
-        let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
-        let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
+        // let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
+        // let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
         println!("Submitting claim transaction...");
         match self
-            .send_and_confirm(&[cu_limit_ix, cu_price_ix, ix], false, false)
+            .send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
         {
             Ok(sig) => {
@@ -78,7 +79,10 @@ impl Miner {
             &spl_token::id(),
         );
         println!("Creating token account {}...", token_account_pubkey);
-        match self.send_and_confirm(&[ix], true, false).await {
+        match self
+            .send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
+            .await
+        {
             Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
             Err(e) => println!("Transaction failed: {:?}", e),
         }

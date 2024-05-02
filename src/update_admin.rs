@@ -3,14 +3,14 @@ use std::str::FromStr;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 
-use crate::Miner;
+use crate::{send_and_confirm::ComputeBudget, Miner};
 
 impl Miner {
     pub async fn update_admin(&self, new_admin: String) {
         let signer = self.signer();
         let new_admin = Pubkey::from_str(new_admin.as_str()).unwrap();
         let ix = ore::instruction::update_admin(signer.pubkey(), new_admin);
-        self.send_and_confirm(&[ix], false, false)
+        self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
             .await
             .expect("Transaction failed");
     }
