@@ -313,12 +313,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "array-const-fn-init"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bcb85e548c05d407fa6faff46b750ba287714ef32afc0f5e15b4641ffd6affb"
-
-[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -983,16 +977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-crypto"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19c63acd992239f1877a7d6387038ca886a2029e41f3d91087fd454f9995f22c"
-dependencies = [
- "keccak-const",
- "sha2-const-stable",
-]
-
-[[package]]
 name = "const-oid"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,12 +1199,6 @@ name = "data-encoding"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
-
-[[package]]
-name = "dekor"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3ef4384366645e7a0edef238717a4b442d81bf69731f7eaa34d0c904df8d62f"
 
 [[package]]
 name = "der"
@@ -2046,12 +2024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keccak-const"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d8d8ce877200136358e0bbff3a77965875db3af755a11e1fa6b1b3e2df13ea"
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2155,18 +2127,6 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
-
-[[package]]
-name = "logfather"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784981c752b9369cf96dc9fd713455f0353ab7828634a195d6fca08d1676e681"
-dependencies = [
- "chrono",
- "dekor",
- "lazy_static",
- "simplicio",
-]
 
 [[package]]
 name = "memchr"
@@ -2518,7 +2478,6 @@ dependencies = [
  "clap 4.4.12",
  "drillx",
  "futures",
- "logfather",
  "num_cpus",
  "ore-program",
  "rand 0.8.5",
@@ -2537,11 +2496,8 @@ dependencies = [
 name = "ore-program"
 version = "1.2.1"
 dependencies = [
- "array-const-fn-init",
  "bs58 0.5.1",
  "bytemuck",
- "const-crypto",
- "drillx",
  "mpl-token-metadata",
  "num_enum 0.7.2",
  "shank",
@@ -3379,12 +3335,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha2-const-stable"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f179d4e11094a893b82fff208f74d448a7512f99f5a0acbd5c679b705f83ed9"
-
-[[package]]
 name = "sha3"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3472,12 +3422,6 @@ name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
-
-[[package]]
-name = "simplicio"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85c7a88c99442bc6110846a9d45f82db7dce684d728a5ae6e14fcf8610a7bb5d"
 
 [[package]]
 name = "siphasher"

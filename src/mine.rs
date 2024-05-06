@@ -3,7 +3,6 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use logfather::{info, warn};
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
@@ -128,8 +127,8 @@ impl Miner {
         // Check num threads
         let num_cores = num_cpus::get() as u64;
         if threads.gt(&num_cores) {
-            warn!(
-                "Number of threads ({}) exceeds available cores ({})",
+            println!(
+                "WARNING: Number of threads ({}) exceeds available cores ({})",
                 threads, num_cores
             );
         }

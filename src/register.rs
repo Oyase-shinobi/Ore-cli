@@ -1,4 +1,3 @@
-use logfather::info;
 use solana_sdk::signature::Signer;
 
 use crate::{send_and_confirm::ComputeBudget, utils::proof_pubkey, Miner};
@@ -13,7 +12,7 @@ impl Miner {
         }
 
         // Sign and send transaction.
-        info!("Generating challenge...");
+        println!("Generating challenge...");
         let ix = ore::instruction::register(signer.pubkey());
         self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
             .await
