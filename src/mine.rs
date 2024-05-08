@@ -3,7 +3,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT};
+use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
@@ -11,7 +11,7 @@ use solana_sdk::signer::Signer;
 
 use crate::{
     send_and_confirm::ComputeBudget,
-    utils::{amount_u64_to_string, get_proof},
+    utils::{amount_u64_to_string, get_clock, get_config, get_proof},
     Miner,
 };
 
@@ -28,9 +28,12 @@ impl Miner {
                 .await;
 
             // Submit most difficult hash
-            let reset_ix = ore::instruction::reset(signer.pubkey());
-            let mine_ix = ore::instruction::mine(signer.pubkey(), find_bus(), nonce);
-            self.send_and_confirm(&[reset_ix, mine_ix], ComputeBudget::Fixed(500_000), false)
+            let mut ixs = vec![];
+            if self.needs_reset().await {
+                ixs.push(ore::instruction::reset(signer.pubkey()));
+            }
+            ixs.push(ore::instruction::mine(signer.pubkey(), find_bus(), nonce));
+            self.send_and_confirm(&ixs, ComputeBudget::Fixed(250_000), false)
                 .await
                 .ok();
         }
@@ -42,7 +45,10 @@ impl Miner {
 
         // Fetch data
         let proof = get_proof(&self.rpc_client, signer).await;
-        println!("Stake balance: {} ORE", amount_u64_to_string(proof.balance));
+        println!(
+            "\nStake balance: {} ORE",
+            amount_u64_to_string(proof.balance)
+        );
         let cutoff_time = get_cutoff(proof, buffer_time);
 
         // Dispatch job to each thread
@@ -132,6 +138,15 @@ impl Miner {
                 threads, num_cores
             );
         }
+    }
+
+    async fn needs_reset(&self) -> bool {
+        let clock = get_clock(&self.rpc_client).await;
+        let config = get_config(&self.rpc_client).await;
+        config
+            .last_reset_at
+            .saturating_add(EPOCH_DURATION)
+            .le(&clock.unix_timestamp)
     }
 }
 

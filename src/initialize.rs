@@ -20,14 +20,6 @@ impl Miner {
             &[&self.signer()],
             blockhash,
         );
-        // let res = self.rpc_client.send_and_confirm_transaction(&tx).await;
-        // let send_cfg = RpcSendTransactionConfig {
-        //     skip_preflight: true,
-        //     preflight_commitment: Some(CommitmentLevel::Confirmed),
-        //     encoding: Some(UiTransactionEncoding::Base64),
-        //     max_retries: Some(0),
-        //     min_context_slot: None,
-        // };
         let res = self.rpc_client.send_and_confirm_transaction(&tx).await;
         println!("{:?}", res);
     }
