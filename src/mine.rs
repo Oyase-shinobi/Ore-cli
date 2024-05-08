@@ -129,7 +129,7 @@ impl Miner {
         best_nonce
     }
 
-    fn check_num_cores(&self, threads: u64) {
+    pub fn check_num_cores(&self, threads: u64) {
         // Check num threads
         let num_cores = num_cpus::get() as u64;
         if threads.gt(&num_cores) {

@@ -1,4 +1,5 @@
 mod balance;
+mod benchmark;
 mod busses;
 mod claim;
 mod cu_limits;
@@ -74,6 +75,9 @@ enum Commands {
     #[command(about = "Fetch the Ore balance of an account")]
     Balance(BalanceArgs),
 
+    #[command(about = "Benchmark your machine's hashrate")]
+    Benchmark(BenchmarkArgs),
+
     #[command(about = "Fetch the distributable rewards of the busses")]
     Busses(BussesArgs),
 
@@ -103,6 +107,18 @@ struct BalanceArgs {
         help = "The address of the account to fetch the balance of"
     )]
     pub address: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+struct BenchmarkArgs {
+    #[arg(
+        long,
+        short,
+        value_name = "THREAD_COUNT",
+        help = "The number of threads to use during the benchmark",
+        default_value = "1"
+    )]
+    threads: u64,
 }
 
 #[derive(Parser, Debug)]
@@ -190,6 +206,9 @@ async fn main() {
     match args.command {
         Commands::Balance(args) => {
             miner.balance(args.address).await;
+        }
+        Commands::Benchmark(args) => {
+            miner.benchmark(args.threads).await;
         }
         Commands::Busses(_) => {
             miner.busses().await;
