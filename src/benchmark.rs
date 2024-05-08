@@ -14,7 +14,10 @@ impl Miner {
         // Dispatch job to each thread
         let challenge = [0; 32];
         let progress_bar = Arc::new(spinner::new_progress_bar());
-        progress_bar.set_message("Benchmarking...");
+        progress_bar.set_message(format!(
+            "Benchmarking. This will take {} sec...",
+            TEST_DURATION
+        ));
         let handles: Vec<_> = (0..threads)
             .map(|i| {
                 std::thread::spawn({
