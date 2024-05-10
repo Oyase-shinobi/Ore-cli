@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
-};
+use std::{sync::Arc, time::Instant};
 
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
@@ -49,7 +46,7 @@ impl Miner {
             "\nStake balance: {} ORE",
             amount_u64_to_string(proof.balance)
         );
-        let cutoff_time = get_cutoff(proof, buffer_time);
+        let cutoff_time = self.get_cutoff(proof, buffer_time).await;
 
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
@@ -148,18 +145,15 @@ impl Miner {
             .saturating_add(EPOCH_DURATION)
             .le(&clock.unix_timestamp)
     }
-}
 
-fn get_cutoff(proof: Proof, buffer_time: u64) -> i64 {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Failed to get time")
-        .as_secs() as i64;
-    proof
-        .last_hash_at
-        .saturating_add(60)
-        .saturating_sub(buffer_time as i64)
-        .saturating_sub(now)
+    async fn get_cutoff(&self, proof: Proof, buffer_time: u64) -> i64 {
+        let clock = get_clock(&self.rpc_client).await;
+        proof
+            .last_hash_at
+            .saturating_add(60)
+            .saturating_sub(buffer_time as i64)
+            .saturating_sub(clock.unix_timestamp)
+    }
 }
 
 // TODO Pick a better strategy (avoid draining bus)
