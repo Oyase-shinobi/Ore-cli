@@ -70,7 +70,11 @@ impl Miner {
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
         unsafe {
-            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), cutoff_time);
+            drill_hash(
+                challenge.as_ptr(),
+                gpu_nonce.as_mut_ptr(),
+                cutoff_time.max(5).min(60),
+            );
         }
 
         // Return nonce
