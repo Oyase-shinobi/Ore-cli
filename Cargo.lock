@@ -1356,6 +1356,7 @@ dependencies = [
 name = "drillx"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "enum_dispatch",
  "num-traits",
  "num_enum 0.5.11",

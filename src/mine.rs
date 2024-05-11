@@ -6,6 +6,12 @@ use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
 
+#[cfg(feature = "gpu")]
+use drillx::{
+    gpu::{drill_hash, gpu_init, set_noise},
+    noise::NOISE,
+};
+
 use crate::{
     send_and_confirm::ComputeBudget,
     utils::{amount_u64_to_string, get_clock, get_config, get_proof},
@@ -19,10 +25,20 @@ impl Miner {
         self.register().await;
 
         loop {
+            // Fetch proof
+            let proof = get_proof(&self.rpc_client, signer.pubkey()).await;
+            println!(
+                "\nStake balance: {} ORE",
+                amount_u64_to_string(proof.balance)
+            );
+
+            // Run drillx (gpu)
+            #[cfg(feature = "gpu")]
+            let nonce = self.find_hash_gpu(proof, buffer_time).await;
+
             // Run drillx
-            let nonce = self
-                .find_hash_par(signer.pubkey(), buffer_time, threads)
-                .await;
+            #[cfg(not(feature = "gpu"))]
+            let nonce = self.find_hash_par(proof, buffer_time, threads).await;
 
             // Submit most difficult hash
             let mut ixs = vec![];
@@ -36,16 +52,34 @@ impl Miner {
         }
     }
 
-    async fn find_hash_par(&self, signer: Pubkey, buffer_time: u64, threads: u64) -> u64 {
+    #[cfg(feature = "gpu")]
+    async fn find_hash_gpu(&self, proof: Proof, buffer_time: u64) -> u64 {
+        let progress_bar = Arc::new(spinner::new_progress_bar());
+        progress_bar.set_message("Mining (gpu)...");
+
+        // TODO Add buffer time to gpu init interface to set cycle time
+        // TODO Other args for gpu init
+        unsafe {
+            gpu_init();
+            set_noise(NOISE.as_usize_slice().as_ptr());
+        }
+
+        // Hash on gpu
+        let challenge = proof.challenge;
+        let mut gpu_nonce = [0; 8];
+        unsafe {
+            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr());
+        }
+
+        // Return nonce
+        u64::from_le_bytes(gpu_nonce)
+    }
+
+    async fn find_hash_par(&self, proof: Proof, buffer_time: u64, threads: u64) -> u64 {
         // Check num threads
         self.check_num_cores(threads);
 
-        // Fetch data
-        let proof = get_proof(&self.rpc_client, signer).await;
-        println!(
-            "\nStake balance: {} ORE",
-            amount_u64_to_string(proof.balance)
-        );
+        // Calc cutoff time
         let cutoff_time = self.get_cutoff(proof, buffer_time).await;
 
         // Dispatch job to each thread
