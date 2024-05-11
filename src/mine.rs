@@ -197,7 +197,8 @@ impl Miner {
             .last_hash_at
             .saturating_add(60)
             .saturating_sub(buffer_time as i64)
-            .saturating_sub(clock.unix_timestamp) as u64
+            .saturating_sub(clock.unix_timestamp)
+            .max(0) as u64
     }
 }
 
