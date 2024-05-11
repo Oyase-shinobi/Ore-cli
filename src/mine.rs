@@ -77,6 +77,15 @@ impl Miner {
             );
         }
 
+        // Calculate hash and difficulty
+        let hx = drillx::hash(challenge, gpu_nonce);
+        let difficulty = drillx::difficulty(hx);
+        progress_bar.finish_with_message(format!(
+            "Best hash: {} (difficulty: {})",
+            bs58::encode(hx).into_string(),
+            difficulty
+        ));
+
         // Return nonce
         u64::from_le_bytes(gpu_nonce)
     }
