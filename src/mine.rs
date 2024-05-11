@@ -78,7 +78,7 @@ impl Miner {
         }
 
         // Calculate hash and difficulty
-        let hx = drillx::hash(challenge, gpu_nonce);
+        let hx = drillx::hash(&challenge, &gpu_nonce);
         let difficulty = drillx::difficulty(hx);
         progress_bar.finish_with_message(format!(
             "Best hash: {} (difficulty: {})",
