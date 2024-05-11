@@ -32,13 +32,16 @@ impl Miner {
                 amount_u64_to_string(proof.balance)
             );
 
+            // Calc cutoff time
+            let cutoff_time = self.get_cutoff(proof, buffer_time).await;
+
             // Run drillx (gpu)
             #[cfg(feature = "gpu")]
-            let nonce = self.find_hash_gpu(proof, buffer_time).await;
+            let nonce = self.find_hash_gpu(proof, cutoff_time).await;
 
             // Run drillx
             #[cfg(not(feature = "gpu"))]
-            let nonce = self.find_hash_par(proof, buffer_time, threads).await;
+            let nonce = self.find_hash_par(proof, cutoff_time, threads).await;
 
             // Submit most difficult hash
             let mut ixs = vec![];
@@ -53,12 +56,11 @@ impl Miner {
     }
 
     #[cfg(feature = "gpu")]
-    async fn find_hash_gpu(&self, proof: Proof, buffer_time: u64) -> u64 {
+    async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining (gpu)...");
 
-        // TODO Add buffer time to gpu init interface to set cycle time
-        // TODO Other args for gpu init
+        // Initial gpu memory
         unsafe {
             gpu_init();
             set_noise(NOISE.as_usize_slice().as_ptr());
@@ -68,19 +70,16 @@ impl Miner {
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
         unsafe {
-            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr());
+            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), cutoff_time);
         }
 
         // Return nonce
         u64::from_le_bytes(gpu_nonce)
     }
 
-    async fn find_hash_par(&self, proof: Proof, buffer_time: u64, threads: u64) -> u64 {
+    async fn find_hash_par(&self, proof: Proof, cutoff_time: u64, threads: u64) -> u64 {
         // Check num threads
         self.check_num_cores(threads);
-
-        // Calc cutoff time
-        let cutoff_time = self.get_cutoff(proof, buffer_time).await;
 
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
@@ -111,7 +110,7 @@ impl Miner {
 
                             // Exit if time has elapsed
                             if nonce % 10_000 == 0 {
-                                if (timer.elapsed().as_secs() as i64).ge(&cutoff_time) {
+                                if timer.elapsed().as_secs().ge(&cutoff_time) {
                                     if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
                                         // Mine until min difficulty has been met
                                         break;
@@ -119,8 +118,7 @@ impl Miner {
                                 } else if i == 0 {
                                     progress_bar.set_message(format!(
                                         "Mining... ({} sec remaining)",
-                                        cutoff_time
-                                            .saturating_sub(timer.elapsed().as_secs() as i64),
+                                        cutoff_time.saturating_sub(timer.elapsed().as_secs()),
                                     ));
                                 }
                             }
@@ -180,13 +178,13 @@ impl Miner {
             .le(&clock.unix_timestamp)
     }
 
-    async fn get_cutoff(&self, proof: Proof, buffer_time: u64) -> i64 {
+    async fn get_cutoff(&self, proof: Proof, buffer_time: u64) -> u64 {
         let clock = get_clock(&self.rpc_client).await;
         proof
             .last_hash_at
             .saturating_add(60)
             .saturating_sub(buffer_time as i64)
-            .saturating_sub(clock.unix_timestamp)
+            .saturating_sub(clock.unix_timestamp) as u64
     }
 }
 
