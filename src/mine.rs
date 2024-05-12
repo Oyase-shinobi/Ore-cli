@@ -92,6 +92,7 @@ impl Miner {
         u64::from_le_bytes(gpu_nonce)
     }
 
+    #[cfg(not(feature = "gpu"))]
     async fn find_hash_par(&self, proof: Proof, cutoff_time: u64, threads: u64) -> u64 {
         // Check num threads
         self.check_num_cores(threads);
