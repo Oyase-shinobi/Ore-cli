@@ -4,14 +4,15 @@ use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 
 use crate::{
+    args::BalanceArgs,
     utils::{amount_u64_to_string, get_proof},
     Miner,
 };
 
 impl Miner {
-    pub async fn balance(&self, address: Option<String>) {
+    pub async fn balance(&self, args: BalanceArgs) {
         let signer = self.signer();
-        let address = if let Some(address) = address {
+        let address = if let Some(address) = args.address {
             if let Ok(address) = Pubkey::from_str(&address) {
                 address
             } else {

@@ -1,3 +1,4 @@
+mod args;
 mod balance;
 mod benchmark;
 mod busses;
@@ -16,6 +17,7 @@ mod utils;
 
 use std::sync::Arc;
 
+use args::*;
 use clap::{command, Parser, Subcommand};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -27,47 +29,6 @@ struct Miner {
     pub keypair_filepath: Option<String>,
     pub priority_fee: u64,
     pub rpc_client: Arc<RpcClient>,
-}
-
-#[derive(Parser, Debug)]
-#[command(about, version)]
-struct Args {
-    #[arg(
-        long,
-        value_name = "NETWORK_URL",
-        help = "Network address of your RPC provider",
-        global = true
-    )]
-    rpc: Option<String>,
-
-    #[clap(
-        global = true,
-        short = 'C',
-        long = "config",
-        id = "PATH",
-        help = "Filepath to config file."
-    )]
-    pub config_file: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "KEYPAIR_FILEPATH",
-        help = "Filepath to keypair to use",
-        global = true
-    )]
-    keypair: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "MICROLAMPORTS",
-        help = "Number of microlamports to pay as priority fee per transaction",
-        default_value = "0",
-        global = true
-    )]
-    priority_fee: u64,
-
-    #[command(subcommand)]
-    command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
@@ -100,79 +61,44 @@ enum Commands {
 }
 
 #[derive(Parser, Debug)]
-struct BalanceArgs {
-    #[arg(
-        // long,
-        value_name = "ADDRESS",
-        help = "The address of the account to fetch the balance of"
-    )]
-    pub address: Option<String>,
-}
-
-#[derive(Parser, Debug)]
-struct BenchmarkArgs {
+#[command(about, version)]
+struct Args {
     #[arg(
         long,
-        short,
-        value_name = "THREAD_COUNT",
-        help = "The number of threads to use during the benchmark",
-        default_value = "1"
+        value_name = "NETWORK_URL",
+        help = "Network address of your RPC provider",
+        global = true
     )]
-    threads: u64,
-}
+    rpc: Option<String>,
 
-#[derive(Parser, Debug)]
-struct BussesArgs {}
-
-#[derive(Parser, Debug)]
-struct RewardsArgs {}
-
-#[derive(Parser, Debug)]
-struct MineArgs {
-    #[arg(
-        long,
-        short,
-        value_name = "THREAD_COUNT",
-        help = "The number of threads to dedicate to mining",
-        default_value = "1"
+    #[clap(
+        global = true,
+        short = 'C',
+        long = "config",
+        id = "PATH",
+        help = "Filepath to config file."
     )]
-    threads: u64,
+    config_file: Option<String>,
 
     #[arg(
         long,
-        short,
-        value_name = "SECONDS",
-        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
-        default_value = "10"
+        value_name = "KEYPAIR_FILEPATH",
+        help = "Filepath to keypair to use",
+        global = true
     )]
-    buffer_time: u64,
-}
-
-#[derive(Parser, Debug)]
-struct ClaimArgs {
-    #[arg(
-        long,
-        value_name = "AMOUNT",
-        help = "The amount of rewards to claim. Defaults to max."
-    )]
-    amount: Option<f64>,
+    keypair: Option<String>,
 
     #[arg(
         long,
-        value_name = "TOKEN_ACCOUNT_ADDRESS",
-        help = "Token account to receive mining rewards."
+        value_name = "MICROLAMPORTS",
+        help = "Number of microlamports to pay as priority fee per transaction",
+        default_value = "0",
+        global = true
     )]
-    beneficiary: Option<String>,
-}
+    priority_fee: u64,
 
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct InitializeArgs {}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct UpdateAdminArgs {
-    new_admin: String,
+    #[command(subcommand)]
+    command: Commands,
 }
 
 #[tokio::main]
@@ -205,10 +131,10 @@ async fn main() {
     // Execute user command.
     match args.command {
         Commands::Balance(args) => {
-            miner.balance(args.address).await;
+            miner.balance(args).await;
         }
         Commands::Benchmark(args) => {
-            miner.benchmark(args.threads).await;
+            miner.benchmark(args).await;
         }
         Commands::Busses(_) => {
             miner.busses().await;
@@ -217,10 +143,10 @@ async fn main() {
             miner.rewards().await;
         }
         Commands::Mine(args) => {
-            miner.mine(args.threads, args.buffer_time).await;
+            miner.mine(args).await;
         }
         Commands::Claim(args) => {
-            miner.claim(args.beneficiary, args.amount).await;
+            miner.claim(args).await;
         }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {
@@ -228,7 +154,7 @@ async fn main() {
         }
         #[cfg(feature = "admin")]
         Commands::UpdateAdmin(args) => {
-            miner.update_admin(args.new_admin).await;
+            miner.update_admin(args).await;
         }
     }
 }

@@ -13,16 +13,23 @@ use drillx::{
 };
 
 use crate::{
+    args::MineArgs,
     send_and_confirm::ComputeBudget,
     utils::{amount_u64_to_string, get_clock, get_config, get_proof},
     Miner,
 };
 
 impl Miner {
-    pub async fn mine(&self, threads: u64, buffer_time: u64) {
+    pub async fn mine(&self, args: MineArgs) {
         // Register, if needed.
         let signer = self.signer();
         self.register().await;
+
+        #[cfg(feature = "gpu")]
+        unsafe {
+            gpu_init();
+            set_noise(NOISE.as_usize_slice().as_ptr());
+        }
 
         loop {
             // Fetch proof
@@ -33,15 +40,15 @@ impl Miner {
             );
 
             // Calc cutoff time
-            let cutoff_time = self.get_cutoff(proof, buffer_time).await;
+            let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx (gpu)
             #[cfg(feature = "gpu")]
-            let nonce = self.find_hash_gpu(proof, cutoff_time).await;
+            let nonce = self.find_hash_gpu(proof, args.clockrate, cutoff_time).await;
 
             // Run drillx
             #[cfg(not(feature = "gpu"))]
-            let nonce = self.find_hash_par(proof, cutoff_time, threads).await;
+            let nonce = self.find_hash_par(proof, cutoff_time, args.threads).await;
 
             // Submit most difficult hash
             let mut ixs = vec![];
@@ -56,15 +63,9 @@ impl Miner {
     }
 
     #[cfg(feature = "gpu")]
-    async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
+    async fn find_hash_gpu(&self, proof: Proof, clockrate: u64, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining (gpu)...");
-
-        // Initial gpu memory
-        unsafe {
-            gpu_init();
-            set_noise(NOISE.as_usize_slice().as_ptr());
-        }
 
         // Hash on gpu
         let challenge = proof.challenge;
@@ -73,6 +74,7 @@ impl Miner {
             drill_hash(
                 challenge.as_ptr(),
                 gpu_nonce.as_mut_ptr(),
+                clockrate,
                 cutoff_time.max(5).min(60),
             );
         }

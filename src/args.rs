@@ -1,0 +1,100 @@
+use clap::{arg, Parser};
+
+#[derive(Parser, Debug)]
+pub struct BalanceArgs {
+    #[arg(
+        long,
+        value_name = "ADDRESS",
+        help = "The address of the account to fetch the balance of"
+    )]
+    pub address: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct BenchmarkArgs {
+    #[arg(
+        long,
+        short,
+        value_name = "THREAD_COUNT",
+        help = "The number of threads to use during the benchmark",
+        default_value = "1"
+    )]
+    pub threads: u64,
+}
+
+#[derive(Parser, Debug)]
+pub struct BussesArgs {}
+
+#[derive(Parser, Debug)]
+pub struct ClaimArgs {
+    #[arg(
+        long,
+        value_name = "AMOUNT",
+        help = "The amount of rewards to claim. Defaults to max."
+    )]
+    pub amount: Option<f64>,
+
+    #[arg(
+        long,
+        value_name = "TOKEN_ACCOUNT_ADDRESS",
+        help = "Token account to receive mining rewards."
+    )]
+    pub beneficiary: Option<String>,
+}
+
+#[cfg(feature = "admin")]
+#[derive(Parser, Debug)]
+pub struct InitializeArgs {}
+
+#[cfg(not(feature = "gpu"))]
+#[derive(Parser, Debug)]
+pub struct MineArgs {
+    #[arg(
+        long,
+        short,
+        value_name = "THREAD_COUNT",
+        help = "The number of threads to dedicate to mining",
+        default_value = "1"
+    )]
+    pub threads: u64,
+
+    #[arg(
+        long,
+        short,
+        value_name = "SECONDS",
+        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
+        default_value = "10"
+    )]
+    pub buffer_time: u64,
+}
+
+#[cfg(feature = "gpu")]
+#[derive(Parser, Debug)]
+pub struct MineArgs {
+    #[arg(
+        long,
+        short,
+        value_name = "kHZ",
+        help = "The clock rate of your gpu device",
+        default_value = "1800000"
+    )]
+    pub clockrate: u64,
+
+    #[arg(
+        long,
+        short,
+        value_name = "SECONDS",
+        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
+        default_value = "10"
+    )]
+    pub buffer_time: u64,
+}
+
+#[derive(Parser, Debug)]
+pub struct RewardsArgs {}
+
+#[cfg(feature = "admin")]
+#[derive(Parser, Debug)]
+pub struct UpdateAdminArgs {
+    pub new_admin: String,
+}

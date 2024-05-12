@@ -5,6 +5,7 @@ use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 
 use crate::{
+    args::ClaimArgs,
     cu_limits::CU_LIMIT_CLAIM,
     send_and_confirm::ComputeBudget,
     utils::{amount_f64_to_u64, amount_u64_to_f64, proof_pubkey},
@@ -12,17 +13,17 @@ use crate::{
 };
 
 impl Miner {
-    pub async fn claim(&self, beneficiary: Option<String>, amount: Option<f64>) {
+    pub async fn claim(&self, args: ClaimArgs) {
         let signer = self.signer();
         let pubkey = signer.pubkey();
         let client = self.rpc_client.clone();
-        let beneficiary = match beneficiary {
+        let beneficiary = match args.beneficiary {
             Some(beneficiary) => {
                 Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
             }
             None => self.initialize_ata().await,
         };
-        let amount = if let Some(amount) = amount {
+        let amount = if let Some(amount) = args.amount {
             amount_f64_to_u64(amount)
         } else {
             match client.get_account(&proof_pubkey(pubkey)).await {
