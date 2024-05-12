@@ -8,7 +8,7 @@ use crate::{
     args::ClaimArgs,
     cu_limits::CU_LIMIT_CLAIM,
     send_and_confirm::ComputeBudget,
-    utils::{amount_f64_to_u64, amount_u64_to_f64, proof_pubkey},
+    utils::{amount_f64_to_u64, proof_pubkey},
     Miner,
 };
 
@@ -37,23 +37,13 @@ impl Miner {
                 }
             }
         };
-        let amountf = amount_u64_to_f64(amount);
+        // let amountf = amount_u64_to_f64(amount);
         // let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
         // let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
-        println!("Submitting claim transaction...");
-        match self
-            .send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
+        self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
-        {
-            Ok(sig) => {
-                println!("Claimed {:} ORE to account {:}", amountf, beneficiary);
-                println!("{:?}", sig);
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-            }
-        }
+            .ok();
     }
 
     async fn initialize_ata(&self) -> Pubkey {
@@ -79,14 +69,9 @@ impl Miner {
             &ore::MINT_ADDRESS,
             &spl_token::id(),
         );
-        println!("Creating token account {}...", token_account_pubkey);
-        match self
-            .send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
+        self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
             .await
-        {
-            Ok(_sig) => println!("Created token account {:?}", token_account_pubkey),
-            Err(e) => println!("Transaction failed: {:?}", e),
-        }
+            .ok();
 
         // Return token account address
         token_account_pubkey
