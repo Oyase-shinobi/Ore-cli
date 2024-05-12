@@ -62,6 +62,7 @@ impl Miner {
         }
     }
 
+    // TODO Countdown on progress bar
     #[cfg(feature = "gpu")]
     async fn find_hash_gpu(&self, proof: Proof, clockrate: u64, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
