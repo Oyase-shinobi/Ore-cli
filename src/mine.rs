@@ -27,7 +27,7 @@ impl Miner {
 
         // Benchmark the gpu
         #[cfg(feature = "gpu")]
-        self.benchmark_gpu();
+        self.benchmark_gpu().await;
 
         // Start mining loop
         loop {
