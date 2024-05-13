@@ -44,7 +44,7 @@ impl Miner {
 
             // Run drillx (gpu)
             #[cfg(feature = "gpu")]
-            let nonce = self.find_hash_gpu(proof, args.clockrate, cutoff_time).await;
+            let nonce = self.find_hash_gpu(proof, cutoff_time).await;
 
             // Run drillx
             #[cfg(not(feature = "gpu"))]
@@ -64,20 +64,33 @@ impl Miner {
 
     // TODO Countdown on progress bar
     #[cfg(feature = "gpu")]
-    async fn find_hash_gpu(&self, proof: Proof, clockrate: u64, cutoff_time: u64) -> u64 {
+    async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
-        progress_bar.set_message("Mining (gpu)...");
+        progress_bar.set_message("Mining on gpu...");
 
         // Hash on gpu
+        let timer = Instant::now();
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
-        unsafe {
-            drill_hash(
-                challenge.as_ptr(),
-                gpu_nonce.as_mut_ptr(),
-                clockrate,
-                cutoff_time.max(5).min(60),
-            );
+        let mut round = 0;
+        loop {
+            // Drill
+            unsafe {
+                drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
+            }
+
+            // Break if done
+            if timer.elapsed().as_secs().ge(&cutoff_time) {
+                break;
+            } else {
+                progress_bar.set_message(format!(
+                    "Mining on gpu... ({} sec remaining)",
+                    cutoff_time.saturating_sub(timer.elapsed().as_secs()),
+                ));
+            }
+
+            // Update round
+            round += 1;
         }
 
         // Calculate hash and difficulty
