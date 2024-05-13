@@ -79,9 +79,9 @@ impl Miner {
             drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), 0);
         }
 
-        batch_size = batch_size
-            .saturating_mul(10_000)
-            .saturating_div(timer.elapsed().as_millis());
+        batch_size = (batch_size as u128)
+            .saturating_mul(10_000u128)
+            .saturating_div(timer.elapsed().as_millis()) as u32;
 
         unsafe {
             gpu_init(batch_size);
