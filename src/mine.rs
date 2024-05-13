@@ -69,14 +69,28 @@ impl Miner {
         progress_bar.set_message("Mining (gpu)...");
 
         // Hash on gpu
+        let timer = Instant::now();
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
-        unsafe {
-            drill_hash(
-                challenge.as_ptr(),
-                gpu_nonce.as_mut_ptr(),
-                cutoff_time.max(5).min(60),
-            );
+        let mut round = 0;
+        loop {
+            // Drill
+            unsafe {
+                drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
+            }
+
+            // Break if done
+            if timer.elapsed().as_secs().ge(&cutoff_time) {
+                break;
+            } else if i == 0 {
+                progress_bar.set_message(format!(
+                    "Mining... ({} sec remaining)",
+                    cutoff_time.saturating_sub(timer.elapsed().as_secs()),
+                ));
+            }
+
+            // Update round
+            round += 1;
         }
 
         // Calculate hash and difficulty
