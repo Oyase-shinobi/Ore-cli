@@ -91,7 +91,6 @@ impl Miner {
 
             // Update round
             round += 1;
-            println!("Round: {}", round);
         }
 
         // Calculate hash and difficulty
