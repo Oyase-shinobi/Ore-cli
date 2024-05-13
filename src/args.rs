@@ -42,6 +42,9 @@ pub struct ClaimArgs {
     pub beneficiary: Option<String>,
 }
 
+#[derive(Parser, Debug)]
+pub struct CloseArgs {}
+
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
 pub struct InitializeArgs {}

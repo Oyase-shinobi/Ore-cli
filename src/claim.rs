@@ -12,6 +12,8 @@ use crate::{
     Miner,
 };
 
+// TODO Burn warning
+
 impl Miner {
     pub async fn claim(&self, args: ClaimArgs) {
         let signer = self.signer();
@@ -37,9 +39,6 @@ impl Miner {
                 }
             }
         };
-        // let amountf = amount_u64_to_f64(amount);
-        // let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_limit(CU_LIMIT_CLAIM);
-        // let cu_price_ix = ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
         self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await

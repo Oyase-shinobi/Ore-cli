@@ -4,7 +4,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_config::RpcSendTransactionConfig,
 };
-use solana_program::instruction::Instruction;
+use solana_program::{instruction::Instruction, native_token::sol_to_lamports};
 use solana_rpc_client::spinner;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -15,6 +15,8 @@ use solana_sdk::{
 use solana_transaction_status::{TransactionConfirmationStatus, UiTransactionEncoding};
 
 use crate::Miner;
+
+const MIN_SOL_BALANCE: f64 = 0.005;
 
 const RPC_RETRIES: usize = 0;
 const _SIMULATION_RETRIES: usize = 4;
@@ -29,6 +31,8 @@ pub enum ComputeBudget {
     Fixed(u32),
 }
 
+// TODO Validate user has sufficient sol
+
 impl Miner {
     pub async fn send_and_confirm(
         &self,
@@ -42,11 +46,11 @@ impl Miner {
 
         // Return error, if balance is zero
         if let Ok(balance) = client.get_balance(&signer.pubkey()).await {
-            if balance <= 0 {
-                return Err(ClientError {
-                    request: None,
-                    kind: ClientErrorKind::Custom("Insufficient SOL balance".into()),
-                });
+            if balance <= sol_to_lamports(MIN_SOL_BALANCE) {
+                panic!(
+                    "Insufficient balance: {} SOL\nPlease top up with at least {} SOL",
+                    balance, MIN_SOL_BALANCE
+                );
             }
         }
 

@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use cached::proc_macro::cached;
 use ore::{
     self,
@@ -53,6 +55,19 @@ pub fn amount_u64_to_f64(amount: u64) -> f64 {
 
 pub fn amount_f64_to_u64(amount: f64) -> u64 {
     (amount * 10f64.powf(ore::TOKEN_DECIMALS as f64)) as u64
+}
+
+pub fn ask_confirm(question: &str) -> bool {
+    println!("{}", question);
+    loop {
+        let mut input = [0];
+        let _ = std::io::stdin().read(&mut input);
+        match input[0] as char {
+            'y' | 'Y' => return true,
+            'n' | 'N' => return false,
+            _ => println!("y/n only please."),
+        }
+    }
 }
 
 #[cached]

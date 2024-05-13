@@ -3,6 +3,7 @@ mod balance;
 mod benchmark;
 mod busses;
 mod claim;
+mod close;
 mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -42,11 +43,14 @@ enum Commands {
     #[command(about = "Fetch the distributable rewards of the busses")]
     Busses(BussesArgs),
 
-    #[command(about = "Mine Ore using local compute")]
-    Mine(MineArgs),
-
     #[command(about = "Claim available mining rewards")]
     Claim(ClaimArgs),
+
+    #[command(about = "Close your onchain accounts to recover rent")]
+    Close(CloseArgs),
+
+    #[command(about = "Start mining Ore")]
+    Mine(MineArgs),
 
     #[command(about = "Fetch the reward rate for each difficulty level")]
     Rewards(RewardsArgs),
@@ -144,6 +148,9 @@ async fn main() {
         }
         Commands::Claim(args) => {
             miner.claim(args).await;
+        }
+        Commands::Close(_) => {
+            miner.close().await;
         }
         Commands::Mine(args) => {
             miner.mine(args).await;
