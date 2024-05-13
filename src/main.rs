@@ -51,6 +51,9 @@ enum Commands {
     #[command(about = "Fetch the reward rate for each difficulty level")]
     Rewards(RewardsArgs),
 
+    #[command(about = "Stake ore to earn a multiplier on your mining rewards")]
+    Stake(StakeArgs),
+
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
     Initialize(InitializeArgs),
@@ -139,14 +142,17 @@ async fn main() {
         Commands::Busses(_) => {
             miner.busses().await;
         }
-        Commands::Rewards(_) => {
-            miner.rewards().await;
+        Commands::Claim(args) => {
+            miner.claim(args).await;
         }
         Commands::Mine(args) => {
             miner.mine(args).await;
         }
-        Commands::Claim(args) => {
-            miner.claim(args).await;
+        Commands::Rewards(_) => {
+            miner.rewards().await;
+        }
+        Commands::Stake(args) => {
+            miner.stake(args).await;
         }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {

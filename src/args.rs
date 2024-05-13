@@ -93,6 +93,23 @@ pub struct MineArgs {
 #[derive(Parser, Debug)]
 pub struct RewardsArgs {}
 
+#[derive(Parser, Debug)]
+pub struct StakeArgs {
+    #[arg(
+        long,
+        value_name = "AMOUNT",
+        help = "The amount of Ore to stake. Defaults to max."
+    )]
+    pub amount: Option<f64>,
+
+    #[arg(
+        long,
+        value_name = "TOKEN_ACCOUNT_ADDRESS",
+        help = "Token account to send Ore from."
+    )]
+    pub sender: Option<String>,
+}
+
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
 pub struct UpdateAdminArgs {
