@@ -65,7 +65,7 @@ impl Miner {
     async fn benchmark_gpu(&self) {
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Benchmarking gpu...");
-        let mut batch_size = 100;
+        let mut batch_size = 256;
 
         unsafe {
             gpu_init(batch_size);
