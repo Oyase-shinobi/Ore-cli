@@ -1,6 +1,9 @@
+mod args;
 mod balance;
+mod benchmark;
 mod busses;
 mod claim;
+mod close;
 mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -8,15 +11,14 @@ mod mine;
 mod register;
 mod rewards;
 mod send_and_confirm;
-mod treasury;
+mod stake;
 #[cfg(feature = "admin")]
 mod update_admin;
-#[cfg(feature = "admin")]
-mod update_difficulty;
 mod utils;
 
 use std::sync::Arc;
 
+use args::*;
 use clap::{command, Parser, Subcommand};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -28,6 +30,41 @@ struct Miner {
     pub keypair_filepath: Option<String>,
     pub priority_fee: u64,
     pub rpc_client: Arc<RpcClient>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    #[command(about = "Fetch the Ore balance of an account")]
+    Balance(BalanceArgs),
+
+    #[command(about = "Benchmark your machine's hashrate")]
+    Benchmark(BenchmarkArgs),
+
+    #[command(about = "Fetch the distributable rewards of the busses")]
+    Busses(BussesArgs),
+
+    #[command(about = "Claim available mining rewards")]
+    Claim(ClaimArgs),
+
+    #[command(about = "Close your onchain accounts to recover rent")]
+    Close(CloseArgs),
+
+    #[command(about = "Start mining Ore")]
+    Mine(MineArgs),
+
+    #[command(about = "Fetch the reward rate for each difficulty level")]
+    Rewards(RewardsArgs),
+
+    #[command(about = "Stake ore to earn a multiplier on your mining rewards")]
+    Stake(StakeArgs),
+
+    #[cfg(feature = "admin")]
+    #[command(about = "Initialize the program")]
+    Initialize(InitializeArgs),
+
+    #[cfg(feature = "admin")]
+    #[command(about = "Update the program admin authority")]
+    UpdateAdmin(UpdateAdminArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -48,7 +85,7 @@ struct Args {
         id = "PATH",
         help = "Filepath to config file."
     )]
-    pub config_file: Option<String>,
+    config_file: Option<String>,
 
     #[arg(
         long,
@@ -70,108 +107,6 @@ struct Args {
     #[command(subcommand)]
     command: Commands,
 }
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    #[command(about = "Fetch the Ore balance of an account")]
-    Balance(BalanceArgs),
-
-    #[command(about = "Fetch the distributable rewards of the busses")]
-    Busses(BussesArgs),
-
-    #[command(about = "Mine Ore using local compute")]
-    Mine(MineArgs),
-
-    #[command(about = "Claim available mining rewards")]
-    Claim(ClaimArgs),
-
-    #[command(about = "Fetch your balance of unclaimed mining rewards")]
-    Rewards(RewardsArgs),
-
-    #[command(about = "Fetch the treasury account and balance")]
-    Treasury(TreasuryArgs),
-
-    #[cfg(feature = "admin")]
-    #[command(about = "Initialize the program")]
-    Initialize(InitializeArgs),
-
-    #[cfg(feature = "admin")]
-    #[command(about = "Update the program admin authority")]
-    UpdateAdmin(UpdateAdminArgs),
-
-    #[cfg(feature = "admin")]
-    #[command(about = "Update the mining difficulty")]
-    UpdateDifficulty(UpdateDifficultyArgs),
-}
-
-#[derive(Parser, Debug)]
-struct BalanceArgs {
-    #[arg(
-        // long,
-        value_name = "ADDRESS",
-        help = "The address of the account to fetch the balance of"
-    )]
-    pub address: Option<String>,
-}
-
-#[derive(Parser, Debug)]
-struct BussesArgs {}
-
-#[derive(Parser, Debug)]
-struct RewardsArgs {
-    #[arg(
-        // long,
-        value_name = "ADDRESS",
-        help = "The address of the account to fetch the rewards balance of"
-    )]
-    pub address: Option<String>,
-}
-
-#[derive(Parser, Debug)]
-struct MineArgs {
-    #[arg(
-        long,
-        short,
-        value_name = "THREAD_COUNT",
-        help = "The number of threads to dedicate to mining",
-        default_value = "1"
-    )]
-    threads: u64,
-}
-
-#[derive(Parser, Debug)]
-struct TreasuryArgs {}
-
-#[derive(Parser, Debug)]
-struct ClaimArgs {
-    #[arg(
-        // long,
-        value_name = "AMOUNT",
-        help = "The amount of rewards to claim. Defaults to max."
-    )]
-    amount: Option<f64>,
-
-    #[arg(
-        // long,
-        value_name = "TOKEN_ACCOUNT_ADDRESS",
-        help = "Token account to receive mining rewards."
-    )]
-    beneficiary: Option<String>,
-}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct InitializeArgs {}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct UpdateAdminArgs {
-    new_admin: String,
-}
-
-#[cfg(feature = "admin")]
-#[derive(Parser, Debug)]
-struct UpdateDifficultyArgs {}
 
 #[tokio::main]
 async fn main() {
@@ -203,22 +138,28 @@ async fn main() {
     // Execute user command.
     match args.command {
         Commands::Balance(args) => {
-            miner.balance(args.address).await;
+            miner.balance(args).await;
+        }
+        Commands::Benchmark(args) => {
+            miner.benchmark(args).await;
         }
         Commands::Busses(_) => {
             miner.busses().await;
         }
-        Commands::Rewards(args) => {
-            miner.rewards(args.address).await;
+        Commands::Claim(args) => {
+            miner.claim(args).await;
         }
-        Commands::Treasury(_) => {
-            miner.treasury().await;
+        Commands::Close(_) => {
+            miner.close().await;
         }
         Commands::Mine(args) => {
-            miner.mine(args.threads).await;
+            miner.mine(args).await;
         }
-        Commands::Claim(args) => {
-            miner.claim(args.beneficiary, args.amount).await;
+        Commands::Rewards(_) => {
+            miner.rewards().await;
+        }
+        Commands::Stake(args) => {
+            miner.stake(args).await;
         }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {
@@ -226,17 +167,17 @@ async fn main() {
         }
         #[cfg(feature = "admin")]
         Commands::UpdateAdmin(args) => {
-            miner.update_admin(args.new_admin).await;
-        }
-        #[cfg(feature = "admin")]
-        Commands::UpdateDifficulty(_) => {
-            miner.update_difficulty().await;
+            miner.update_admin(args).await;
         }
     }
 }
 
 impl Miner {
-    pub fn new(rpc_client: Arc<RpcClient>, priority_fee: u64, keypair_filepath: Option<String>) -> Self {
+    pub fn new(
+        rpc_client: Arc<RpcClient>,
+        priority_fee: u64,
+        keypair_filepath: Option<String>,
+    ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
