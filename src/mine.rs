@@ -27,7 +27,11 @@ impl Miner {
 
         // Benchmark the gpu
         #[cfg(feature = "gpu")]
-        self.benchmark_gpu().await;
+        unsafe {
+            gpu_init(128);
+            set_noise(NOISE.as_usize_slice().as_ptr());
+        }
+        // self.benchmark_gpu().await;
 
         // Start mining loop
         loop {
