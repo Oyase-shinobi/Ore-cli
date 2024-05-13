@@ -66,7 +66,7 @@ impl Miner {
     #[cfg(feature = "gpu")]
     async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
-        progress_bar.set_message("Mining (gpu)...");
+        progress_bar.set_message("Mining on gpu...");
 
         // Hash on gpu
         let timer = Instant::now();
@@ -84,7 +84,7 @@ impl Miner {
                 break;
             } else {
                 progress_bar.set_message(format!(
-                    "Mining... ({} sec remaining)",
+                    "Mining on gpu... ({} sec remaining)",
                     cutoff_time.saturating_sub(timer.elapsed().as_secs()),
                 ));
             }
