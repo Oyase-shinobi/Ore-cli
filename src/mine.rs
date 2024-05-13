@@ -80,7 +80,7 @@ impl Miner {
         }
 
         batch_size = (batch_size as u128)
-            .saturating_mul(10_000u128)
+            .saturating_mul(5_000u128)
             .saturating_div(timer.elapsed().as_millis()) as u32;
 
         unsafe {
