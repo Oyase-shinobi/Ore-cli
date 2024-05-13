@@ -49,39 +49,17 @@ pub struct CloseArgs {}
 #[derive(Parser, Debug)]
 pub struct InitializeArgs {}
 
-#[cfg(not(feature = "gpu"))]
 #[derive(Parser, Debug)]
 pub struct MineArgs {
+    #[cfg(not(feature = "gpu"))]
     #[arg(
         long,
         short,
         value_name = "THREAD_COUNT",
-        help = "The number of threads to dedicate to mining",
+        help = "The number of cpu threads to dedicate to mining",
         default_value = "1"
     )]
     pub threads: u64,
-
-    #[arg(
-        long,
-        short,
-        value_name = "SECONDS",
-        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
-        default_value = "10"
-    )]
-    pub buffer_time: u64,
-}
-
-#[cfg(feature = "gpu")]
-#[derive(Parser, Debug)]
-pub struct MineArgs {
-    #[arg(
-        long,
-        short,
-        value_name = "kHZ",
-        help = "The clock rate of your gpu device",
-        default_value = "1800000"
-    )]
-    pub clockrate: u64,
 
     #[arg(
         long,
