@@ -82,7 +82,7 @@ impl Miner {
             // Break if done
             if timer.elapsed().as_secs().ge(&cutoff_time) {
                 break;
-            } else if i == 0 {
+            } else {
                 progress_bar.set_message(format!(
                     "Mining... ({} sec remaining)",
                     cutoff_time.saturating_sub(timer.elapsed().as_secs()),
