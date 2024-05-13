@@ -27,11 +27,11 @@ impl Miner {
 
         // Benchmark the gpu
         #[cfg(feature = "gpu")]
-        unsafe {
-            gpu_init(128);
-            set_noise(NOISE.as_usize_slice().as_ptr());
-        }
-        // self.benchmark_gpu().await;
+        self.benchmark_gpu().await;
+        // unsafe {
+        //     gpu_init(128);
+        //     set_noise(NOISE.as_usize_slice().as_ptr());
+        // }
 
         // Start mining loop
         loop {
@@ -66,10 +66,10 @@ impl Miner {
     }
 
     #[cfg(feature = "gpu")]
-    async fn benchmark_gpu(&self) {
+    async fn benchmark_gpu(&self, cutoff_time: u64) {
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Benchmarking gpu...");
-        let mut batch_size = 256;
+        let mut batch_size = 512;
 
         unsafe {
             gpu_init(batch_size);
@@ -84,7 +84,7 @@ impl Miner {
         }
 
         batch_size = (batch_size as u128)
-            .saturating_mul(5_000u128)
+            .saturating_mul(1000 * (60 - cutofftime))
             .saturating_div(timer.elapsed().as_millis()) as u32;
 
         unsafe {
@@ -105,25 +105,25 @@ impl Miner {
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
         let mut round = 0;
-        loop {
-            // Drill
-            unsafe {
-                drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
-            }
-
-            // Break if done
-            if timer.elapsed().as_secs().ge(&cutoff_time) {
-                break;
-            } else {
-                progress_bar.set_message(format!(
-                    "Mining on gpu... ({} sec remaining)",
-                    cutoff_time.saturating_sub(timer.elapsed().as_secs()),
-                ));
-            }
-
-            // Update round
-            round += 1;
+        // loop {
+        // Drill
+        unsafe {
+            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
         }
+
+        // Break if done
+        if timer.elapsed().as_secs().ge(&cutoff_time) {
+            break;
+        } else {
+            progress_bar.set_message(format!(
+                "Mining on gpu... ({} sec remaining)",
+                cutoff_time.saturating_sub(timer.elapsed().as_secs()),
+            ));
+        }
+
+        // Update round
+        //     round += 1;
+        // }
 
         // Calculate hash and difficulty
         let hx = drillx::hash(&challenge, &gpu_nonce);
