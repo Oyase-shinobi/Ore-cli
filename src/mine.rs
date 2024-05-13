@@ -27,7 +27,7 @@ impl Miner {
 
         // Benchmark the gpu
         #[cfg(feature = "gpu")]
-        self.benchmark_gpu().await;
+        self.benchmark_gpu(args.buffer_time).await;
         // unsafe {
         //     gpu_init(128);
         //     set_noise(NOISE.as_usize_slice().as_ptr());
@@ -66,7 +66,9 @@ impl Miner {
     }
 
     #[cfg(feature = "gpu")]
-    async fn benchmark_gpu(&self, cutoff_time: u64) {
+    async fn benchmark_gpu(&self, buffer_time: u64) {
+        use ore::ONE_MINUTE;
+
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Benchmarking gpu...");
         let mut batch_size = 512;
@@ -84,7 +86,7 @@ impl Miner {
         }
 
         batch_size = (batch_size as u128)
-            .saturating_mul(1000 * (60 - cutofftime))
+            .saturating_mul(1000 * (ONE_MINUTE as u64 - buffer_time) as u128)
             .saturating_div(timer.elapsed().as_millis()) as u32;
 
         unsafe {
@@ -94,6 +96,7 @@ impl Miner {
         progress_bar.finish_with_message(format!("Batch size set to {}", batch_size));
     }
 
+    // TODO Countdown on progress bar
     #[cfg(feature = "gpu")]
     async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
