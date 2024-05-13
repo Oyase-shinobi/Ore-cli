@@ -56,7 +56,7 @@ pub struct MineArgs {
         long,
         short,
         value_name = "THREAD_COUNT",
-        help = "The number of cpu threads to dedicate to mining",
+        help = "The number of CPU threads to allocate to mining",
         default_value = "1"
     )]
     pub threads: u64,
@@ -65,7 +65,7 @@ pub struct MineArgs {
         long,
         short,
         value_name = "SECONDS",
-        help = "The number seconds before liveness penalty deadline to stop mining and start submitting",
+        help = "The number seconds before the deadline to stop mining and start submitting",
         default_value = "10"
     )]
     pub buffer_time: u64,

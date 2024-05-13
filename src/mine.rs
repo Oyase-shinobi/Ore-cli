@@ -25,12 +25,11 @@ impl Miner {
         let signer = self.signer();
         self.register().await;
 
+        // Benchmark the gpu
         #[cfg(feature = "gpu")]
-        unsafe {
-            gpu_init();
-            set_noise(NOISE.as_usize_slice().as_ptr());
-        }
+        self.benchmark_gpu();
 
+        // Start mining loop
         loop {
             // Fetch proof
             let proof = get_proof(&self.rpc_client, signer.pubkey()).await;
@@ -60,6 +59,35 @@ impl Miner {
                 .await
                 .ok();
         }
+    }
+
+    #[cfg(feature = "gpu")]
+    async fn benchmark_gpu(&self) {
+        let progress_bar = Arc::new(spinner::new_progress_bar());
+        progress_bar.set_message("Benchmarking gpu...");
+        let mut batch_size = 100;
+
+        unsafe {
+            gpu_init(batch_size);
+            set_noise(NOISE.as_usize_slice().as_ptr());
+        }
+
+        let timer = Instant::now();
+        let challenge = [0; 32];
+        let mut gpu_nonce = [0; 8];
+        unsafe {
+            drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), 0);
+        }
+
+        batch_size = batch_size
+            .saturating_mul(10_000)
+            .saturating_div(timer.elapsed().as_millis());
+
+        unsafe {
+            gpu_init(batch_size);
+        }
+
+        progress_bar.finish_with_message(format!("Batch size set to {}", batch_size));
     }
 
     // TODO Countdown on progress bar
