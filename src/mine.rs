@@ -94,7 +94,6 @@ impl Miner {
         progress_bar.finish_with_message(format!("Batch size set to {}", batch_size));
     }
 
-    // TODO Countdown on progress bar
     #[cfg(feature = "gpu")]
     async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
         let progress_bar = Arc::new(spinner::new_progress_bar());
