@@ -4,7 +4,10 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_config::RpcSendTransactionConfig,
 };
-use solana_program::{instruction::Instruction, native_token::sol_to_lamports};
+use solana_program::{
+    instruction::Instruction,
+    native_token::{lamports_to_sol, sol_to_lamports},
+};
 use solana_rpc_client::spinner;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -49,7 +52,8 @@ impl Miner {
             if balance <= sol_to_lamports(MIN_SOL_BALANCE) {
                 panic!(
                     "Insufficient balance: {} SOL\nPlease top up with at least {} SOL",
-                    balance, MIN_SOL_BALANCE
+                    lamports_to_sol(balance),
+                    MIN_SOL_BALANCE
                 );
             }
         }
