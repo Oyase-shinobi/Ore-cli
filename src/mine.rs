@@ -28,10 +28,6 @@ impl Miner {
         // Benchmark the gpu
         #[cfg(feature = "gpu")]
         self.benchmark_gpu(args.buffer_time).await;
-        // unsafe {
-        //     gpu_init(128);
-        //     set_noise(NOISE.as_usize_slice().as_ptr());
-        // }
 
         // Start mining loop
         loop {
@@ -103,29 +99,12 @@ impl Miner {
         progress_bar.set_message("Mining on gpu...");
 
         // Hash on gpu
-        // let timer = Instant::now();
         let challenge = proof.challenge;
         let mut gpu_nonce = [0; 8];
         let mut round = 0;
-        // loop {
-        // Drill
         unsafe {
             drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
         }
-
-        // Break if done
-        // if timer.elapsed().as_secs().ge(&cutoff_time) {
-        //     break;
-        // } else {
-        //     progress_bar.set_message(format!(
-        //         "Mining on gpu... ({} sec remaining)",
-        //         cutoff_time.saturating_sub(timer.elapsed().as_secs()),
-        //     ));
-        // }
-
-        // Update round
-        //     round += 1;
-        // }
 
         // Calculate hash and difficulty
         let hx = drillx::hash(&challenge, &gpu_nonce);
