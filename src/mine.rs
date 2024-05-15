@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
-use drillx::{Hash, Solution};
+use drillx::{equix, Hash, Solution};
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
@@ -137,6 +137,7 @@ impl Miner {
                 std::thread::spawn({
                     let proof = proof.clone();
                     let progress_bar = progress_bar.clone();
+                    let mut memory = equix::SolverMemory::new();
                     move || {
                         let timer = Instant::now();
                         let first_nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
@@ -146,7 +147,11 @@ impl Miner {
                         let mut best_hash = Hash::default();
                         loop {
                             // Create hash
-                            if let Ok(hx) = drillx::hash(&proof.challenge, &nonce.to_le_bytes()) {
+                            if let Ok(hx) = drillx::hash_with_memory(
+                                &mut memory,
+                                &proof.challenge,
+                                &nonce.to_le_bytes(),
+                            ) {
                                 let difficulty = hx.difficulty();
                                 if difficulty.gt(&best_difficulty) {
                                     best_nonce = nonce;
