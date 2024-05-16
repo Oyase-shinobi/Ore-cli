@@ -61,7 +61,10 @@ impl Miner {
         // Set compute units
         let mut final_ixs = vec![];
         match compute_budget {
-            ComputeBudget::Dynamic => {} // TODO simulate
+            ComputeBudget::Dynamic => {
+                // TODO simulate
+                final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(1_400_000))
+            }
             ComputeBudget::Fixed(cus) => {
                 final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(cus))
             }
@@ -150,6 +153,7 @@ impl Miner {
             std::thread::sleep(Duration::from_millis(GATEWAY_DELAY));
             attempts += 1;
             if attempts > GATEWAY_RETRIES {
+                progress_bar.finish_with_message("Error: Max retries");
                 return Err(ClientError {
                     request: None,
                     kind: ClientErrorKind::Custom("Max retries".into()),
