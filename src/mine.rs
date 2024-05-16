@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Instant};
 
-use drillx::{equix, Hash, Solution};
+use drillx::{
+    equix::{self},
+    Hash, Solution,
+};
 use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
@@ -140,8 +143,7 @@ impl Miner {
                     let mut memory = equix::SolverMemory::new();
                     move || {
                         let timer = Instant::now();
-                        let first_nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
-                        let mut nonce = first_nonce;
+                        let mut nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
                         let mut best_nonce = nonce;
                         let mut best_difficulty = 0;
                         let mut best_hash = Hash::default();

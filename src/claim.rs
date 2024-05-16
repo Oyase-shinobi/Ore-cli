@@ -1,24 +1,23 @@
 use std::str::FromStr;
 
-use ore::{self, state::Proof, utils::AccountDeserialize};
+use ore::{self, ONE_DAY};
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
+use spl_token::amount_to_ui_amount;
 
 use crate::{
     args::ClaimArgs,
     cu_limits::CU_LIMIT_CLAIM,
     send_and_confirm::ComputeBudget,
-    utils::{amount_f64_to_u64, proof_pubkey},
+    utils::{amount_f64_to_u64, ask_confirm, get_clock, get_proof},
     Miner,
 };
-
-// TODO Burn warning
 
 impl Miner {
     pub async fn claim(&self, args: ClaimArgs) {
         let signer = self.signer();
         let pubkey = signer.pubkey();
-        let client = self.rpc_client.clone();
+        let proof = get_proof(&self.rpc_client, pubkey).await;
         let beneficiary = match args.beneficiary {
             Some(beneficiary) => {
                 Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
@@ -28,17 +27,30 @@ impl Miner {
         let amount = if let Some(amount) = args.amount {
             amount_f64_to_u64(amount)
         } else {
-            match client.get_account(&proof_pubkey(pubkey)).await {
-                Ok(proof_account) => {
-                    let proof = Proof::try_from_bytes(&proof_account.data).unwrap();
-                    proof.balance
-                }
-                Err(err) => {
-                    println!("Error looking up claimable rewards: {:?}", err);
-                    return;
-                }
-            }
+            proof.balance
         };
+
+        // Burn warning
+        let clock = get_clock(&self.rpc_client).await;
+        let t = proof.last_claim_at.saturating_add(ONE_DAY);
+        if clock.unix_timestamp.lt(&t) {
+            let burn_amount = amount
+                .saturating_mul(t.saturating_sub(clock.unix_timestamp) as u64)
+                .saturating_div(ONE_DAY as u64);
+            let mins_ago = clock
+                .unix_timestamp
+                .saturating_sub(proof.last_claim_at)
+                .saturating_div(60);
+            if !ask_confirm(
+                format!("WARNING: You are about to burn {} ORE!\n\nClaims more frequent than once per day are subject to burning. Your last claim was {} minutes ago.\n\nAre you sure you want to continue? [Y/n]", 
+                    amount_to_ui_amount(burn_amount, ore::TOKEN_DECIMALS),
+                    mins_ago
+                ).as_str()
+            ) {
+                return;
+            }
+        }
+
         let ix = ore::instruction::claim(pubkey, beneficiary, amount);
         self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
@@ -60,7 +72,6 @@ impl Miner {
         if let Ok(Some(_ata)) = client.get_token_account(&token_account_pubkey).await {
             return token_account_pubkey;
         }
-
         // Sign and send transaction.
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
             &signer.pubkey(),
