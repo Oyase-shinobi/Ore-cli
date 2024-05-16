@@ -24,6 +24,9 @@ impl Miner {
         let signer = self.signer();
         self.register().await;
 
+        // Check num threads
+        self.check_num_cores(args.threads);
+
         // Start mining loop
         loop {
             // Fetch proof
@@ -56,9 +59,6 @@ impl Miner {
     }
 
     async fn find_hash_par(&self, proof: Proof, cutoff_time: u64, threads: u64) -> Solution {
-        // Check num threads
-        self.check_num_cores(threads);
-
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining...");
