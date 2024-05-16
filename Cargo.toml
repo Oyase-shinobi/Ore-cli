@@ -21,6 +21,7 @@ bytemuck = "1.15.0"
 cached = "0.46.1"
 chrono = "0.4.38"
 clap = { version = "4.4.12", features = ["derive"] }
+colored = "2.0"
 drillx = { path = "../drillx/drillx", optional = false }
 futures = "0.3.30"
 num_cpus = "1.16.0"

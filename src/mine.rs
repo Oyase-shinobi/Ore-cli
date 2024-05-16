@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use colored::*;
 use drillx::{
     equix::{self},
     Hash, Solution,
@@ -143,8 +144,10 @@ impl Miner {
         let num_cores = num_cpus::get() as u64;
         if threads.gt(&num_cores) {
             println!(
-                "WARNING: Number of threads ({}) exceeds available cores ({})",
-                threads, num_cores
+                "{} Number of threads ({}) exceeds available cores ({})",
+                "WARNING".bold().yellow(),
+                threads,
+                num_cores
             );
         }
     }

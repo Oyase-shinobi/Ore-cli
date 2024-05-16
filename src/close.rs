@@ -1,3 +1,4 @@
+use colored::*;
 use solana_sdk::signature::Signer;
 use spl_token::amount_to_ui_amount;
 
@@ -16,7 +17,8 @@ impl Miner {
 
         // Confirm the user wants to close.
         if !ask_confirm(
-            format!("You have {} ORE staked in this account.\nAre you sure you want to {}close this account? [Y/n]", 
+            format!("{} You have {} ORE staked in this account.\nAre you sure you want to {}close this account? [Y/n]", 
+                "WARNING".yellow(),
                 amount_to_ui_amount(proof.balance, ore::TOKEN_DECIMALS),
                 if proof.balance.gt(&0) { "claim your stake and "} else { "" }
             ).as_str()
