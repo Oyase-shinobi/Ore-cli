@@ -66,7 +66,7 @@ pub struct MineArgs {
         short,
         value_name = "SECONDS",
         help = "The number seconds before the deadline to stop mining and start submitting",
-        default_value = "10"
+        default_value = "5"
     )]
     pub buffer_time: u64,
 }
