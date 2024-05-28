@@ -40,7 +40,7 @@ impl Miner {
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx
-            let solution = self.find_hash_par(proof, cutoff_time, args.threads).await;
+            let solution = Self::find_hash_par(proof, cutoff_time, args.threads).await;
 
             // Submit most difficult hash
             let mut ixs = vec![];
@@ -58,7 +58,7 @@ impl Miner {
         }
     }
 
-    async fn find_hash_par(&self, proof: Proof, cutoff_time: u64, threads: u64) -> Solution {
+    async fn find_hash_par(proof: Proof, cutoff_time: u64, threads: u64) -> Solution {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining...");
