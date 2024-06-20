@@ -4,7 +4,7 @@ use spl_token::amount_to_ui_amount;
 
 use crate::{
     send_and_confirm::ComputeBudget,
-    utils::{amount_f64_to_u64, ask_confirm},
+    utils::{amount_f64_to_u64_v1, ask_confirm},
     Miner, UpgradeArgs,
 };
 
@@ -17,19 +17,22 @@ impl Miner {
         let amount_f64 = match args.amount {
             Some(f64) => f64,
             None => {
-                println!("Defaulting to max amount: {}", sender_balance);
+                println!(
+                    "Defaulting to max amount of v1 Ore token in wallet: {}",
+                    sender_balance
+                );
                 sender_balance
             }
         };
-        let amount = amount_f64_to_u64(amount_f64);
+        let amount = amount_f64_to_u64_v1(amount_f64);
+        let amount_ui = amount_to_ui_amount(amount, ore::TOKEN_DECIMALS_V1);
         println!("amount: {}", amount);
-        println!("beneficiary: {}", beneficiary);
-        println!("sender: {}", sender);
+        println!("amount_ui: {}", amount_ui);
 
         if !ask_confirm(
             format!(
                 "\n You are about to upgrade {}. \n\nAre you sure you want to continue? [Y/n]",
-                format!("{} ORE", amount_to_ui_amount(amount, ore::TOKEN_DECIMALS)).bold(),
+                format!("{} ORE", amount_ui).bold(),
             )
             .as_str(),
         ) {
