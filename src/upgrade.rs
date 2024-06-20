@@ -67,22 +67,19 @@ impl Miner {
         // Get token account balance
         let balance = match client.get_token_account(&token_account_pubkey_v1).await {
             Ok(None) => {
-                println!("v1 token account doesn't exist");
-                panic!()
+                panic!("v1 token account doesn't exist")
             }
             Ok(Some(token_account)) => match token_account.token_amount.ui_amount {
                 Some(ui_amount) => ui_amount,
                 None => {
-                    println!(
+                    panic!(
                         "Error parsing token account UI amount: {}",
                         token_account.token_amount.amount
-                    );
-                    panic!()
+                    )
                 }
             },
             Err(err) => {
-                println!("Error fetching token account: {}", err);
-                panic!()
+                panic!("Error fetching token account: {}", err)
             }
         };
 
