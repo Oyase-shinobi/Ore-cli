@@ -3,6 +3,7 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use spl_token::amount_to_ui_amount;
 
 use crate::{
+    cu_limits::CU_LIMIT_UPGRADE,
     send_and_confirm::ComputeBudget,
     utils::{amount_f64_to_u64_v1, ask_confirm},
     Miner, UpgradeArgs,
@@ -26,8 +27,6 @@ impl Miner {
         };
         let amount = amount_f64_to_u64_v1(amount_f64);
         let amount_ui = amount_to_ui_amount(amount, ore::TOKEN_DECIMALS_V1);
-        println!("amount: {}", amount);
-        println!("amount_ui: {}", amount_ui);
 
         if !ask_confirm(
             format!(
@@ -39,10 +38,9 @@ impl Miner {
             return;
         }
 
-        // TODO: fixed compute budget
         let ix = ore::instruction::upgrade(signer.pubkey(), beneficiary, sender, amount);
         match self
-            .send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
+            .send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_UPGRADE), false)
             .await
         {
             Ok(tx) => {
@@ -93,7 +91,7 @@ impl Miner {
     }
 
     async fn get_or_initialize_ata(&self) -> Pubkey {
-        // Initialize client.
+        // Initialize client
         let signer = self.signer();
         let client = self.rpc_client.clone();
 
