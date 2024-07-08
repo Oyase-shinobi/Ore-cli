@@ -5,7 +5,10 @@ use drillx::{
     equix::{self},
     Hash, Solution,
 };
-use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
+use ore_api::{
+    consts::{BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION},
+    state::Proof,
+};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
@@ -22,7 +25,7 @@ impl Miner {
     pub async fn mine(&self, args: MineArgs) {
         // Register, if needed.
         let signer = self.signer();
-        self.register().await;
+        self.open().await;
 
         // Check num threads
         self.check_num_cores(args.threads);
@@ -45,9 +48,9 @@ impl Miner {
             // Submit most difficult hash
             let mut ixs = vec![];
             if self.needs_reset().await {
-                ixs.push(ore::instruction::reset(signer.pubkey()));
+                ixs.push(ore_api::instruction::reset(signer.pubkey()));
             }
-            ixs.push(ore::instruction::mine(
+            ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
                 find_bus(),
                 solution,
@@ -92,7 +95,7 @@ impl Miner {
                             // Exit if time has elapsed
                             if nonce % 100 == 0 {
                                 if timer.elapsed().as_secs().ge(&cutoff_time) {
-                                    if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
+                                    if best_difficulty.gt(&ore_api::consts::MIN_DIFFICULTY) {
                                         // Mine until min difficulty has been met
                                         break;
                                     }

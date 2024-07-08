@@ -8,6 +8,8 @@ mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
 mod mine;
+#[cfg(feature = "admin")]
+mod pause;
 mod register;
 mod rewards;
 mod send_and_confirm;
@@ -65,6 +67,10 @@ enum Commands {
     #[cfg(feature = "admin")]
     #[command(about = "Update the program admin authority")]
     UpdateAdmin(UpdateAdminArgs),
+
+    #[cfg(feature = "admin")]
+    #[command(about = "Pause or unpause mining")]
+    Pause(PauseArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -168,6 +174,10 @@ async fn main() {
         #[cfg(feature = "admin")]
         Commands::UpdateAdmin(args) => {
             miner.update_admin(args).await;
+        }
+        #[cfg(feature = "admin")]
+        Commands::Pause(_) => {
+            miner.pause().await;
         }
     }
 }

@@ -1374,6 +1374,7 @@ dependencies = [
 [[package]]
 name = "drillx"
 version = "0.2.0"
+source = "git+https://github.com/regolith-labs/drillx?branch=master#ce0330957a2153c9191bdbcbcf4acce031ccd6bf"
 dependencies = [
  "blake3",
  "equix",
@@ -2541,6 +2542,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "ore-api"
+version = "2.0.0"
+source = "git+https://github.com/regolith-labs/ore?rev=ce9a701#ce9a7012a2cf02a1d295316071d91a9acceaed25"
+dependencies = [
+ "array-const-fn-init",
+ "bytemuck",
+ "const-crypto",
+ "drillx",
+ "mpl-token-metadata",
+ "num_enum 0.7.2",
+ "ore-utils",
+ "shank",
+ "solana-program",
+ "spl-associated-token-account",
+ "spl-token",
+ "static_assertions",
+ "thiserror",
+]
+
+[[package]]
 name = "ore-cli"
 version = "0.5.0"
 dependencies = [
@@ -2554,7 +2575,8 @@ dependencies = [
  "drillx",
  "futures",
  "num_cpus",
- "ore-program",
+ "ore-api",
+ "ore-utils",
  "rand 0.8.5",
  "solana-cli-config",
  "solana-client",
@@ -2568,22 +2590,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ore-program"
+name = "ore-utils"
 version = "2.0.0"
+source = "git+https://github.com/regolith-labs/ore?rev=ce9a701#ce9a7012a2cf02a1d295316071d91a9acceaed25"
 dependencies = [
- "array-const-fn-init",
- "bs58 0.5.1",
  "bytemuck",
- "const-crypto",
- "drillx",
- "mpl-token-metadata",
- "num_enum 0.7.2",
- "shank",
  "solana-program",
- "spl-associated-token-account",
- "spl-token",
- "static_assertions",
- "thiserror",
 ]
 
 [[package]]

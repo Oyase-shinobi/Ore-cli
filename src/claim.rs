@@ -33,14 +33,18 @@ impl Miner {
         if !ask_confirm(
             format!(
                 "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
-                format!("{} ORE", amount_to_ui_amount(amount, ore::TOKEN_DECIMALS)).bold(),
+                format!(
+                    "{} ORE",
+                    amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
+                )
+                .bold(),
             )
             .as_str(),
         ) {
             return;
         }
 
-        let ix = ore::instruction::claim(pubkey, beneficiary, amount);
+        let ix = ore_api::instruction::claim(pubkey, beneficiary, amount);
         self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
             .ok();
@@ -54,7 +58,7 @@ impl Miner {
         // Build instructions.
         let token_account_pubkey = spl_associated_token_account::get_associated_token_address(
             &signer.pubkey(),
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
         );
 
         // Check if ata already exists
@@ -65,7 +69,7 @@ impl Miner {
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
             &signer.pubkey(),
             &signer.pubkey(),
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
             &spl_token::id(),
         );
         self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)

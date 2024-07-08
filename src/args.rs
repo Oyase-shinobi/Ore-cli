@@ -47,6 +47,10 @@ pub struct CloseArgs {}
 
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
+pub struct PauseArgs {}
+
+#[cfg(feature = "admin")]
+#[derive(Parser, Debug)]
 pub struct InitializeArgs {}
 
 #[derive(Parser, Debug)]

@@ -22,10 +22,11 @@ cached = "0.46.1"
 chrono = "0.4.38"
 clap = { version = "4.4.12", features = ["derive"] }
 colored = "2.0"
-drillx = { path = "../drillx/drillx", optional = false }
+drillx = { git = "https://github.com/regolith-labs/drillx", branch = "master", features = ["solana"] }
 futures = "0.3.30"
 num_cpus = "1.16.0"
-ore = { path = "../ore", package = "ore-program" }
+ore-api = { git = "https://github.com/regolith-labs/ore", rev = "ce9a701" }
+ore-utils = { git = "https://github.com/regolith-labs/ore", rev = "ce9a701" }
 rand = "0.8.4"
 solana-cli-config = "^1.18"
 solana-client = "^1.18"
