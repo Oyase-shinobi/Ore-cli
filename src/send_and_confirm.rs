@@ -1,10 +1,14 @@
 use std::time::Duration;
 
+use colored::*;
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     rpc_config::RpcSendTransactionConfig,
 };
-use solana_program::{instruction::Instruction, native_token::sol_to_lamports};
+use solana_program::{
+    instruction::Instruction,
+    native_token::{lamports_to_sol, sol_to_lamports},
+};
 use solana_rpc_client::spinner;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -31,8 +35,6 @@ pub enum ComputeBudget {
     Fixed(u32),
 }
 
-// TODO Validate user has sufficient sol
-
 impl Miner {
     pub async fn send_and_confirm(
         &self,
@@ -48,8 +50,10 @@ impl Miner {
         if let Ok(balance) = client.get_balance(&signer.pubkey()).await {
             if balance <= sol_to_lamports(MIN_SOL_BALANCE) {
                 panic!(
-                    "Insufficient balance: {} SOL\nPlease top up with at least {} SOL",
-                    balance, MIN_SOL_BALANCE
+                    "{} Insufficient balance: {} SOL\nPlease top up with at least {} SOL",
+                    "ERROR".bold().red(),
+                    lamports_to_sol(balance),
+                    MIN_SOL_BALANCE
                 );
             }
         }
@@ -57,7 +61,10 @@ impl Miner {
         // Set compute units
         let mut final_ixs = vec![];
         match compute_budget {
-            ComputeBudget::Dynamic => {} // TODO simulate
+            ComputeBudget::Dynamic => {
+                // TODO simulate
+                final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(1_400_000))
+            }
             ComputeBudget::Fixed(cus) => {
                 final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(cus))
             }
@@ -90,13 +97,13 @@ impl Miner {
             progress_bar.set_message(format!("Submitting transaction... (attempt {})", attempts));
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
-                    // Skip confirm
+                    // Skip confirmation
                     if skip_confirm {
                         progress_bar.finish_with_message(format!("Sent: {}", sig));
                         return Ok(sig);
                     }
 
-                    // Do confirmations
+                    // Confirm the tx landed
                     for _ in 0..CONFIRM_RETRIES {
                         std::thread::sleep(Duration::from_millis(CONFIRM_DELAY));
                         match client.get_signature_statuses(&[sig]).await {
@@ -116,7 +123,8 @@ impl Miner {
                                                 TransactionConfirmationStatus::Confirmed
                                                 | TransactionConfirmationStatus::Finalized => {
                                                     progress_bar.finish_with_message(format!(
-                                                        "Confirmed: {}",
+                                                        "{} {}",
+                                                        "OK".bold().green(),
                                                         sig
                                                     ));
                                                     return Ok(sig);
@@ -129,8 +137,11 @@ impl Miner {
 
                             // Handle confirmation errors
                             Err(err) => {
-                                progress_bar
-                                    .set_message(format!("Error: {}", err.kind().to_string()));
+                                progress_bar.set_message(format!(
+                                    "{}: {}",
+                                    "ERROR".bold().red(),
+                                    err.kind().to_string()
+                                ));
                             }
                         }
                     }
@@ -138,7 +149,11 @@ impl Miner {
 
                 // Handle submit errors
                 Err(err) => {
-                    progress_bar.set_message(format!("Error: {}", err.kind().to_string()));
+                    progress_bar.set_message(format!(
+                        "{}: {}",
+                        "ERROR".bold().red(),
+                        err.kind().to_string()
+                    ));
                 }
             }
 
@@ -146,6 +161,7 @@ impl Miner {
             std::thread::sleep(Duration::from_millis(GATEWAY_DELAY));
             attempts += 1;
             if attempts > GATEWAY_RETRIES {
+                progress_bar.finish_with_message(format!("{}: Max retries", "ERROR".bold().red()));
                 return Err(ClientError {
                     request: None,
                     kind: ClientErrorKind::Custom("Max retries".into()),

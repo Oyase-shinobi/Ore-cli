@@ -1,24 +1,23 @@
 use std::str::FromStr;
 
-use ore::{self, state::Proof, utils::AccountDeserialize};
+use colored::*;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
+use spl_token::amount_to_ui_amount;
 
 use crate::{
     args::ClaimArgs,
     cu_limits::CU_LIMIT_CLAIM,
     send_and_confirm::ComputeBudget,
-    utils::{amount_f64_to_u64, proof_pubkey},
+    utils::{amount_f64_to_u64, ask_confirm, get_proof},
     Miner,
 };
-
-// TODO Burn warning
 
 impl Miner {
     pub async fn claim(&self, args: ClaimArgs) {
         let signer = self.signer();
         let pubkey = signer.pubkey();
-        let client = self.rpc_client.clone();
+        let proof = get_proof(&self.rpc_client, pubkey).await;
         let beneficiary = match args.beneficiary {
             Some(beneficiary) => {
                 Pubkey::from_str(&beneficiary).expect("Failed to parse beneficiary address")
@@ -28,18 +27,24 @@ impl Miner {
         let amount = if let Some(amount) = args.amount {
             amount_f64_to_u64(amount)
         } else {
-            match client.get_account(&proof_pubkey(pubkey)).await {
-                Ok(proof_account) => {
-                    let proof = Proof::try_from_bytes(&proof_account.data).unwrap();
-                    proof.balance
-                }
-                Err(err) => {
-                    println!("Error looking up claimable rewards: {:?}", err);
-                    return;
-                }
-            }
+            proof.balance
         };
-        let ix = ore::instruction::claim(pubkey, beneficiary, amount);
+
+        if !ask_confirm(
+            format!(
+                "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
+                format!(
+                    "{} ORE",
+                    amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
+                )
+                .bold(),
+            )
+            .as_str(),
+        ) {
+            return;
+        }
+
+        let ix = ore_api::instruction::claim(pubkey, beneficiary, amount);
         self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
             .ok();
@@ -53,19 +58,18 @@ impl Miner {
         // Build instructions.
         let token_account_pubkey = spl_associated_token_account::get_associated_token_address(
             &signer.pubkey(),
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
         );
 
         // Check if ata already exists
         if let Ok(Some(_ata)) = client.get_token_account(&token_account_pubkey).await {
             return token_account_pubkey;
         }
-
         // Sign and send transaction.
         let ix = spl_associated_token_account::instruction::create_associated_token_account(
             &signer.pubkey(),
             &signer.pubkey(),
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
             &spl_token::id(),
         );
         self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)

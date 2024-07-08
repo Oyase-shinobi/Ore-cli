@@ -1,16 +1,18 @@
 use std::{sync::Arc, time::Instant};
 
-use ore::{self, state::Proof, BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION};
+use colored::*;
+use drillx::{
+    equix::{self},
+    Hash, Solution,
+};
+use ore_api::{
+    consts::{BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION},
+    state::Proof,
+};
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
-
-#[cfg(feature = "gpu")]
-use drillx::{
-    gpu::{drill_hash, gpu_init, set_noise},
-    noise::NOISE,
-};
 
 use crate::{
     args::MineArgs,
@@ -23,14 +25,12 @@ impl Miner {
     pub async fn mine(&self, args: MineArgs) {
         // Register, if needed.
         let signer = self.signer();
-        self.register().await;
+        self.open().await;
 
-        #[cfg(feature = "gpu")]
-        unsafe {
-            gpu_init();
-            set_noise(NOISE.as_usize_slice().as_ptr());
-        }
+        // Check num threads
+        self.check_num_cores(args.threads);
 
+        // Start mining loop
         loop {
             // Fetch proof
             let proof = get_proof(&self.rpc_client, signer.pubkey()).await;
@@ -42,75 +42,26 @@ impl Miner {
             // Calc cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
-            // Run drillx (gpu)
-            #[cfg(feature = "gpu")]
-            let nonce = self.find_hash_gpu(proof, cutoff_time).await;
-
             // Run drillx
-            #[cfg(not(feature = "gpu"))]
-            let nonce = self.find_hash_par(proof, cutoff_time, args.threads).await;
+            let solution = Self::find_hash_par(proof, cutoff_time, args.threads).await;
 
             // Submit most difficult hash
             let mut ixs = vec![];
             if self.needs_reset().await {
-                ixs.push(ore::instruction::reset(signer.pubkey()));
+                ixs.push(ore_api::instruction::reset(signer.pubkey()));
             }
-            ixs.push(ore::instruction::mine(signer.pubkey(), find_bus(), nonce));
-            self.send_and_confirm(&ixs, ComputeBudget::Fixed(250_000), false)
+            ixs.push(ore_api::instruction::mine(
+                signer.pubkey(),
+                find_bus(),
+                solution,
+            ));
+            self.send_and_confirm(&ixs, ComputeBudget::Fixed(500_000), false)
                 .await
                 .ok();
         }
     }
 
-    // TODO Countdown on progress bar
-    #[cfg(feature = "gpu")]
-    async fn find_hash_gpu(&self, proof: Proof, cutoff_time: u64) -> u64 {
-        let progress_bar = Arc::new(spinner::new_progress_bar());
-        progress_bar.set_message("Mining on gpu...");
-
-        // Hash on gpu
-        let timer = Instant::now();
-        let challenge = proof.challenge;
-        let mut gpu_nonce = [0; 8];
-        let mut round = 0;
-        loop {
-            // Drill
-            unsafe {
-                drill_hash(challenge.as_ptr(), gpu_nonce.as_mut_ptr(), round);
-            }
-
-            // Break if done
-            if timer.elapsed().as_secs().ge(&cutoff_time) {
-                break;
-            } else {
-                progress_bar.set_message(format!(
-                    "Mining on gpu... ({} sec remaining)",
-                    cutoff_time.saturating_sub(timer.elapsed().as_secs()),
-                ));
-            }
-
-            // Update round
-            round += 1;
-        }
-
-        // Calculate hash and difficulty
-        let hx = drillx::hash(&challenge, &gpu_nonce);
-        let difficulty = drillx::difficulty(hx);
-        progress_bar.finish_with_message(format!(
-            "Best hash: {} (difficulty: {})",
-            bs58::encode(hx).into_string(),
-            difficulty
-        ));
-
-        // Return nonce
-        u64::from_le_bytes(gpu_nonce)
-    }
-
-    #[cfg(not(feature = "gpu"))]
-    async fn find_hash_par(&self, proof: Proof, cutoff_time: u64, threads: u64) -> u64 {
-        // Check num threads
-        self.check_num_cores(threads);
-
+    async fn find_hash_par(proof: Proof, cutoff_time: u64, threads: u64) -> Solution {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining...");
@@ -119,29 +70,32 @@ impl Miner {
                 std::thread::spawn({
                     let proof = proof.clone();
                     let progress_bar = progress_bar.clone();
+                    let mut memory = equix::SolverMemory::new();
                     move || {
                         let timer = Instant::now();
-                        let first_nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
-                        let mut nonce = first_nonce;
+                        let mut nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
                         let mut best_nonce = nonce;
                         let mut best_difficulty = 0;
-                        let mut best_hash = [0; 32];
+                        let mut best_hash = Hash::default();
                         loop {
                             // Create hash
-                            let hx = drillx::hash(&proof.challenge, &nonce.to_le_bytes());
-                            let difficulty = drillx::difficulty(hx);
-
-                            // Check difficulty
-                            if difficulty.gt(&best_difficulty) {
-                                best_nonce = nonce;
-                                best_difficulty = difficulty;
-                                best_hash = hx;
+                            if let Ok(hx) = drillx::hash_with_memory(
+                                &mut memory,
+                                &proof.challenge,
+                                &nonce.to_le_bytes(),
+                            ) {
+                                let difficulty = hx.difficulty();
+                                if difficulty.gt(&best_difficulty) {
+                                    best_nonce = nonce;
+                                    best_difficulty = difficulty;
+                                    best_hash = hx;
+                                }
                             }
 
                             // Exit if time has elapsed
-                            if nonce % 10_000 == 0 {
+                            if nonce % 100 == 0 {
                                 if timer.elapsed().as_secs().ge(&cutoff_time) {
-                                    if best_difficulty.gt(&ore::MIN_DIFFICULTY) {
+                                    if best_difficulty.gt(&ore_api::consts::MIN_DIFFICULTY) {
                                         // Mine until min difficulty has been met
                                         break;
                                     }
@@ -167,7 +121,7 @@ impl Miner {
         // Join handles and return best nonce
         let mut best_nonce = 0;
         let mut best_difficulty = 0;
-        let mut best_hash = [0; 32];
+        let mut best_hash = Hash::default();
         for h in handles {
             if let Ok((nonce, difficulty, hash)) = h.join() {
                 if difficulty > best_difficulty {
@@ -181,11 +135,11 @@ impl Miner {
         // Update log
         progress_bar.finish_with_message(format!(
             "Best hash: {} (difficulty: {})",
-            bs58::encode(best_hash).into_string(),
+            bs58::encode(best_hash.h).into_string(),
             best_difficulty
         ));
 
-        best_nonce
+        Solution::new(best_hash.d, best_nonce.to_le_bytes())
     }
 
     pub fn check_num_cores(&self, threads: u64) {
@@ -193,8 +147,10 @@ impl Miner {
         let num_cores = num_cpus::get() as u64;
         if threads.gt(&num_cores) {
             println!(
-                "WARNING: Number of threads ({}) exceeds available cores ({})",
-                threads, num_cores
+                "{} Number of threads ({}) exceeds available cores ({})",
+                "WARNING".bold().yellow(),
+                threads,
+                num_cores
             );
         }
     }

@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use ore::{self};
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 
@@ -17,7 +16,7 @@ impl Miner {
             Some(sender) => Pubkey::from_str(&sender).expect("Failed to parse sender address"),
             None => spl_associated_token_account::get_associated_token_address(
                 &signer.pubkey(),
-                &ore::MINT_ADDRESS,
+                &ore_api::consts::MINT_ADDRESS,
             ),
         };
 
@@ -36,7 +35,7 @@ impl Miner {
         };
 
         // Send tx
-        let ix = ore::instruction::stake(signer.pubkey(), sender, amount);
+        let ix = ore_api::instruction::stake(signer.pubkey(), sender, amount);
         self.send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_CLAIM), false)
             .await
             .ok();

@@ -25,7 +25,7 @@ impl Miner {
         let proof = get_proof(&self.rpc_client, address).await;
         let token_account_address = spl_associated_token_account::get_associated_token_address(
             &address,
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
         );
         let token_balance = if let Ok(Some(token_account)) = self
             .rpc_client

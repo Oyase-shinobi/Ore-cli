@@ -8,12 +8,10 @@ mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
 mod mine;
-mod register;
+mod open;
 mod rewards;
 mod send_and_confirm;
 mod stake;
-#[cfg(feature = "admin")]
-mod update_admin;
 mod utils;
 
 use std::sync::Arc;
@@ -61,10 +59,6 @@ enum Commands {
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
     Initialize(InitializeArgs),
-
-    #[cfg(feature = "admin")]
-    #[command(about = "Update the program admin authority")]
-    UpdateAdmin(UpdateAdminArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -168,6 +162,10 @@ async fn main() {
         #[cfg(feature = "admin")]
         Commands::UpdateAdmin(args) => {
             miner.update_admin(args).await;
+        }
+        #[cfg(feature = "admin")]
+        Commands::Pause(_) => {
+            miner.pause().await;
         }
     }
 }
