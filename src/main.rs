@@ -8,7 +8,7 @@ mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
 mod mine;
-mod register;
+mod open;
 mod rewards;
 mod send_and_confirm;
 mod stake;
