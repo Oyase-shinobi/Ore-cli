@@ -159,14 +159,6 @@ async fn main() {
         Commands::Initialize(_) => {
             miner.initialize().await;
         }
-        #[cfg(feature = "admin")]
-        Commands::UpdateAdmin(args) => {
-            miner.update_admin(args).await;
-        }
-        #[cfg(feature = "admin")]
-        Commands::Pause(_) => {
-            miner.pause().await;
-        }
     }
 }
 
