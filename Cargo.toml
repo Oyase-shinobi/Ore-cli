@@ -22,11 +22,11 @@ cached = "0.46.1"
 chrono = "0.4.38"
 clap = { version = "4.4.12", features = ["derive"] }
 colored = "2.0"
-drillx = { git = "https://github.com/regolith-labs/drillx", branch = "master", features = ["solana"] }
+drillx = "2.0.0-beta"
 futures = "0.3.30"
 num_cpus = "1.16.0"
-ore-api = { git = "https://github.com/regolith-labs/ore", rev = "ce9a701" }
-ore-utils = { git = "https://github.com/regolith-labs/ore", rev = "ce9a701" }
+ore-api = "2.0.0-beta"
+ore-utils = "2.0.0-beta"
 rand = "0.8.4"
 solana-cli-config = "^1.18"
 solana-client = "^1.18"
@@ -35,5 +35,5 @@ solana-rpc-client = "^1.18"
 solana-sdk = "^1.18"
 solana-transaction-status = "^1.18"
 spl-token = { version = "^4", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "^2.2", features = [ "no-entrypoint" ] }
+spl-associated-token-account = { version = "^2.3", features = [ "no-entrypoint" ] }
 tokio = "1.35.1"
