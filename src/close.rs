@@ -30,7 +30,7 @@ impl Miner {
         if proof.balance.gt(&0) {
             self.claim(ClaimArgs {
                 amount: None,
-                beneficiary: None,
+                to: None,
             })
             .await;
         }

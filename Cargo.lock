@@ -2549,9 +2549,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-api"
-version = "2.0.0-beta"
+version = "2.0.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e8157da5714319e2c0859a12ed63109aef45ad48ca72c007944dc7def3286d"
+checksum = "056ff29e6efbe2c3c97ec35cbdbebac4ed46cb0adbd6d537c4084b457508d892"
 dependencies = [
  "array-const-fn-init",
  "bytemuck",
@@ -2598,9 +2598,9 @@ dependencies = [
 
 [[package]]
 name = "ore-utils"
-version = "2.0.0-beta"
+version = "2.0.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b60da5fc616eaee4c6c010f9fd4b7cf1789b581aceea202b18f0966e571241f"
+checksum = "18957b8679f7c7ea9ae9318d47283befec2ca155f60af900802632f9de459509"
 dependencies = [
  "bytemuck",
  "solana-program",

@@ -27,10 +27,14 @@ pub async fn get_config(client: &RpcClient) -> Config {
     *Config::try_from_bytes(&data).expect("Failed to parse config account")
 }
 
-pub async fn get_proof(client: &RpcClient, authority: Pubkey) -> Proof {
+pub async fn get_proof_with_authority(client: &RpcClient, authority: Pubkey) -> Proof {
     let proof_address = proof_pubkey(authority);
+    get_proof(client, proof_address).await
+}
+
+pub async fn get_proof(client: &RpcClient, address: Pubkey) -> Proof {
     let data = client
-        .get_account_data(&proof_address)
+        .get_account_data(&address)
         .await
         .expect("Failed to get miner account");
     *Proof::try_from_bytes(&data).expect("Failed to parse miner account")

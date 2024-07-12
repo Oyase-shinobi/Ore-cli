@@ -36,10 +36,10 @@ pub struct ClaimArgs {
 
     #[arg(
         long,
-        value_name = "TOKEN_ACCOUNT_ADDRESS",
-        help = "Token account to receive mining rewards."
+        value_name = "WALLET_ADDRESS",
+        help = "Wallet to receive claimed tokens."
     )]
-    pub beneficiary: Option<String>,
+    pub to: Option<String>,
 }
 
 #[derive(Parser, Debug)]

@@ -7,7 +7,7 @@ use drillx::{
 };
 use ore_api::{
     consts::{BUS_ADDRESSES, BUS_COUNT, EPOCH_DURATION},
-    state::Proof,
+    state::{Config, Proof},
 };
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
@@ -17,7 +17,7 @@ use solana_sdk::signer::Signer;
 use crate::{
     args::MineArgs,
     send_and_confirm::ComputeBudget,
-    utils::{amount_u64_to_string, get_clock, get_config, get_proof},
+    utils::{amount_u64_to_string, get_clock, get_config, get_proof_with_authority},
     Miner,
 };
 
@@ -33,7 +33,7 @@ impl Miner {
         // Start mining loop
         loop {
             // Fetch proof
-            let proof = get_proof(&self.rpc_client, signer.pubkey()).await;
+            let proof = get_proof_with_authority(&self.rpc_client, signer.pubkey()).await;
             println!(
                 "\nStake balance: {} ORE",
                 amount_u64_to_string(proof.balance)
@@ -46,9 +46,13 @@ impl Miner {
             let solution = Self::find_hash_par(proof, cutoff_time, args.threads).await;
 
             // Submit most difficult hash
+            let config = get_config(&self.rpc_client).await;
             let mut ixs = vec![];
-            if self.needs_reset().await {
+            if self.should_reset(config).await {
                 ixs.push(ore_api::instruction::reset(signer.pubkey()));
+            }
+            if self.should_crown(config, proof).await {
+                // TODO ixs.push(ore_api::instruction::crown())
             }
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
@@ -155,9 +159,12 @@ impl Miner {
         }
     }
 
-    async fn needs_reset(&self) -> bool {
+    async fn should_crown(&self, config: Config, proof: Proof) -> bool {
+        proof.balance.gt(&config.max_stake)
+    }
+
+    async fn should_reset(&self, config: Config) -> bool {
         let clock = get_clock(&self.rpc_client).await;
-        let config = get_config(&self.rpc_client).await;
         config
             .last_reset_at
             .saturating_add(EPOCH_DURATION)
