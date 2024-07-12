@@ -111,7 +111,11 @@ impl Miner {
                                 for status in signature_statuses.value {
                                     if let Some(status) = status {
                                         if let Some(err) = status.err {
-                                            progress_bar.set_message(format!("Error: {}", err));
+                                            progress_bar.finish_with_message(format!(
+                                                "{}: {}",
+                                                "ERROR".bold().red(),
+                                                err
+                                            ));
                                             return Err(ClientError {
                                                 request: None,
                                                 kind: ClientErrorKind::Custom(err.to_string()),
