@@ -45,6 +45,9 @@ pub struct ClaimArgs {
 #[derive(Parser, Debug)]
 pub struct CloseArgs {}
 
+#[derive(Parser, Debug)]
+pub struct ConfigArgs {}
+
 #[cfg(feature = "admin")]
 #[derive(Parser, Debug)]
 pub struct PauseArgs {}

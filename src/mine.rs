@@ -47,19 +47,25 @@ impl Miner {
 
             // Submit most difficult hash
             let config = get_config(&self.rpc_client).await;
+            let mut compute_budget = 500_000;
             let mut ixs = vec![];
             if self.should_reset(config).await {
+                compute_budget += 100_000;
                 ixs.push(ore_api::instruction::reset(signer.pubkey()));
             }
             if self.should_crown(config, proof).await {
-                // TODO ixs.push(ore_api::instruction::crown())
+                compute_budget += 250_000;
+                ixs.push(ore_api::instruction::crown(
+                    signer.pubkey(),
+                    config.top_staker,
+                ))
             }
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
                 find_bus(),
                 solution,
             ));
-            self.send_and_confirm(&ixs, ComputeBudget::Fixed(500_000), false)
+            self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
                 .await
                 .ok();
         }

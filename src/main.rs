@@ -4,6 +4,7 @@ mod benchmark;
 mod busses;
 mod claim;
 mod close;
+mod config;
 mod cu_limits;
 #[cfg(feature = "admin")]
 mod initialize;
@@ -46,6 +47,9 @@ enum Commands {
 
     #[command(about = "Close your account to recover rent")]
     Close(CloseArgs),
+
+    #[command(about = "Fetch the program config")]
+    Config(ConfigArgs),
 
     #[command(about = "Start mining")]
     Mine(MineArgs),
@@ -146,6 +150,9 @@ async fn main() {
         Commands::Close(_) => {
             miner.close().await;
         }
+        Commands::Config(_) => {
+            miner.config().await;
+        }
         Commands::Mine(args) => {
             miner.mine(args).await;
         }
@@ -177,7 +184,8 @@ impl Miner {
 
     pub fn signer(&self) -> Keypair {
         match self.keypair_filepath.clone() {
-            Some(filepath) => read_keypair_file(filepath).unwrap(),
+            Some(filepath) => read_keypair_file(filepath.clone())
+                .expect(format!("No keypair found at {}", filepath).as_str()),
             None => panic!("No keypair provided"),
         }
     }
