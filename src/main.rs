@@ -32,28 +32,28 @@ struct Miner {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    #[command(about = "Fetch the Ore balance of an account")]
+    #[command(about = "Fetch an account balance")]
     Balance(BalanceArgs),
 
-    #[command(about = "Benchmark your machine's hashrate")]
+    #[command(about = "Benchmark your hashpower")]
     Benchmark(BenchmarkArgs),
 
-    #[command(about = "Fetch the distributable rewards of the busses")]
+    #[command(about = "Fetch the bus account balances")]
     Busses(BussesArgs),
 
-    #[command(about = "Claim available mining rewards")]
+    #[command(about = "Claim your mining rewards")]
     Claim(ClaimArgs),
 
-    #[command(about = "Close your onchain accounts to recover rent")]
+    #[command(about = "Close your account to recover rent")]
     Close(CloseArgs),
 
-    #[command(about = "Start mining Ore")]
+    #[command(about = "Start mining")]
     Mine(MineArgs),
 
-    #[command(about = "Fetch the reward rate for each difficulty level")]
+    #[command(about = "Fetch the current reward rate for each difficulty level")]
     Rewards(RewardsArgs),
 
-    #[command(about = "Stake ore to earn a multiplier on your mining rewards")]
+    #[command(about = "Stake to earn a rewards multiplier")]
     Stake(StakeArgs),
 
     #[cfg(feature = "admin")]
