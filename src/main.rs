@@ -61,7 +61,7 @@ enum Commands {
     #[command(about = "Stake to earn a rewards multiplier")]
     Stake(StakeArgs),
 
-    #[command(about = "Upgrade your v1 Ore to v2")]
+    #[command(about = "Upgrade your ORE tokens from v1 to v2")]
     Upgrade(UpgradeArgs),
 
     #[cfg(feature = "admin")]

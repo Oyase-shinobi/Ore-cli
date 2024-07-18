@@ -43,9 +43,7 @@ impl Miner {
             .send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_UPGRADE), false)
             .await
         {
-            Ok(tx) => {
-                println!("tx: {}", tx);
-            }
+            Ok(_sig) => {}
             Err(err) => {
                 println!("error: {}", err);
             }
