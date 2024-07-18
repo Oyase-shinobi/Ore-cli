@@ -62,6 +62,7 @@ impl Miner {
             }
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
+                signer.pubkey(),
                 find_bus(),
                 solution,
             ));
