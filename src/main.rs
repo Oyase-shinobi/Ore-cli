@@ -13,6 +13,7 @@ mod open;
 mod rewards;
 mod send_and_confirm;
 mod stake;
+mod upgrade;
 mod utils;
 
 use std::sync::Arc;
@@ -59,6 +60,9 @@ enum Commands {
 
     #[command(about = "Stake to earn a rewards multiplier")]
     Stake(StakeArgs),
+
+    #[command(about = "Upgrade your ORE tokens from v1 to v2")]
+    Upgrade(UpgradeArgs),
 
     #[cfg(feature = "admin")]
     #[command(about = "Initialize the program")]
@@ -161,6 +165,9 @@ async fn main() {
         }
         Commands::Stake(args) => {
             miner.stake(args).await;
+        }
+        Commands::Upgrade(args) => {
+            miner.upgrade(args).await;
         }
         #[cfg(feature = "admin")]
         Commands::Initialize(_) => {

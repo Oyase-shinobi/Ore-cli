@@ -34,5 +34,7 @@ solana-rpc-client = "^1.18"
 solana-sdk = "^1.18"
 solana-transaction-status = "^1.18"
 spl-token = { version = "^4", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "^2.3", features = [ "no-entrypoint" ] }
+spl-associated-token-account = { version = "^2.3", features = [
+  "no-entrypoint",
+] }
 tokio = "1.35.1"

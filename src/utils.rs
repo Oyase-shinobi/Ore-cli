@@ -2,7 +2,9 @@ use std::io::Read;
 
 use cached::proc_macro::cached;
 use ore_api::{
-    consts::{CONFIG_ADDRESS, MINT_ADDRESS, PROOF, TOKEN_DECIMALS, TREASURY_ADDRESS},
+    consts::{
+        CONFIG_ADDRESS, MINT_ADDRESS, PROOF, TOKEN_DECIMALS, TOKEN_DECIMALS_V1, TREASURY_ADDRESS,
+    },
     state::{Config, Proof, Treasury},
 };
 use ore_utils::AccountDeserialize;
@@ -58,6 +60,10 @@ pub fn amount_u64_to_f64(amount: u64) -> f64 {
 
 pub fn amount_f64_to_u64(amount: f64) -> u64 {
     (amount * 10f64.powf(TOKEN_DECIMALS as f64)) as u64
+}
+
+pub fn amount_f64_to_u64_v1(amount: f64) -> u64 {
+    (amount * 10f64.powf(TOKEN_DECIMALS_V1 as f64)) as u64
 }
 
 pub fn ask_confirm(question: &str) -> bool {
