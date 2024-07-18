@@ -1369,12 +1369,13 @@ dependencies = [
 
 [[package]]
 name = "drillx"
-version = "2.0.0-beta"
+version = "2.0.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3e8d2de66aeedec77a653a4e2cf0cf4de4ddf556947214becfc16de4604c5db"
+checksum = "3bc503e6662deb892b18b41e6d23d2604d7a7804c00d4b84e1d58ecf22daa61c"
 dependencies = [
  "blake3",
  "equix",
+ "serde",
  "solana-program",
  "strum",
 ]
@@ -2549,9 +2550,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "ore-api"
-version = "2.0.0-beta.2"
+version = "2.0.0-beta.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "612d67826797dd32cac2769662462875e6015af26e6d8ef553e03c9f3b0c9994"
+checksum = "8bad98916e2ec619ac66509b1ec08c3a1b2f404fe46c9775bdd41f6cbe6c9f43"
 dependencies = [
  "array-const-fn-init",
  "bytemuck",
