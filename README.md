@@ -1,13 +1,27 @@
-# Ore CLI
+# ORE CLI
 
-A command line interface for the Ore program.
+A command line interface for ORE cryptocurrency mining.
 
-## Building
+## Install
 
-To build the Ore CLI, you will need to have the Rust programming language installed. You can install Rust by following the instructions on the [Rust website](https://www.rust-lang.org/tools/install).
+To install the CLI, use [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html):
 
-Once you have Rust installed, you can build the Ore CLI by running the following command:
+```sh
+cargo install ore-cli
+```
+
+## Build
+
+To build the codebase from scratch, checkout the repo and use cargo to build:
 
 ```sh
 cargo build --release
+```
+
+## Help
+
+You can use the `-h` flag on any command to pull up a help menu with documentation:
+
+```sh
+ore -h
 ```

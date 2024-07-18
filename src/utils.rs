@@ -1,12 +1,13 @@
 use std::io::Read;
 
 use cached::proc_macro::cached;
-use ore::{
-    self,
+use ore_api::{
+    consts::{
+        CONFIG_ADDRESS, MINT_ADDRESS, PROOF, TOKEN_DECIMALS, TOKEN_DECIMALS_V1, TREASURY_ADDRESS,
+    },
     state::{Config, Proof, Treasury},
-    utils::AccountDeserialize,
-    CONFIG_ADDRESS, MINT_ADDRESS, PROOF, TREASURY_ADDRESS,
 };
+use ore_utils::AccountDeserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{pubkey::Pubkey, sysvar};
 use solana_sdk::clock::Clock;
@@ -28,10 +29,14 @@ pub async fn get_config(client: &RpcClient) -> Config {
     *Config::try_from_bytes(&data).expect("Failed to parse config account")
 }
 
-pub async fn get_proof(client: &RpcClient, authority: Pubkey) -> Proof {
+pub async fn get_proof_with_authority(client: &RpcClient, authority: Pubkey) -> Proof {
     let proof_address = proof_pubkey(authority);
+    get_proof(client, proof_address).await
+}
+
+pub async fn get_proof(client: &RpcClient, address: Pubkey) -> Proof {
     let data = client
-        .get_account_data(&proof_address)
+        .get_account_data(&address)
         .await
         .expect("Failed to get miner account");
     *Proof::try_from_bytes(&data).expect("Failed to parse miner account")
@@ -50,15 +55,15 @@ pub fn amount_u64_to_string(amount: u64) -> String {
 }
 
 pub fn amount_u64_to_f64(amount: u64) -> f64 {
-    (amount as f64) / 10f64.powf(ore::TOKEN_DECIMALS as f64)
+    (amount as f64) / 10f64.powf(TOKEN_DECIMALS as f64)
 }
 
 pub fn amount_f64_to_u64(amount: f64) -> u64 {
-    (amount * 10f64.powf(ore::TOKEN_DECIMALS as f64)) as u64
+    (amount * 10f64.powf(TOKEN_DECIMALS as f64)) as u64
 }
 
 pub fn amount_f64_to_u64_v1(amount: f64) -> u64 {
-    (amount * 10f64.powf(ore::TOKEN_DECIMALS_V1 as f64)) as u64
+    (amount * 10f64.powf(TOKEN_DECIMALS_V1 as f64)) as u64
 }
 
 pub fn ask_confirm(question: &str) -> bool {
@@ -76,7 +81,7 @@ pub fn ask_confirm(question: &str) -> bool {
 
 #[cached]
 pub fn proof_pubkey(authority: Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[PROOF, authority.as_ref()], &ore::ID).0
+    Pubkey::find_program_address(&[PROOF, authority.as_ref()], &ore_api::ID).0
 }
 
 #[cached]

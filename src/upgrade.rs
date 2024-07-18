@@ -26,7 +26,7 @@ impl Miner {
             }
         };
         let amount = amount_f64_to_u64_v1(amount_f64);
-        let amount_ui = amount_to_ui_amount(amount, ore::TOKEN_DECIMALS_V1);
+        let amount_ui = amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS_V1);
 
         if !ask_confirm(
             format!(
@@ -38,7 +38,7 @@ impl Miner {
             return;
         }
 
-        let ix = ore::instruction::upgrade(signer.pubkey(), beneficiary, sender, amount);
+        let ix = ore_api::instruction::upgrade(signer.pubkey(), beneficiary, sender, amount);
         match self
             .send_and_confirm(&[ix], ComputeBudget::Fixed(CU_LIMIT_UPGRADE), false)
             .await
@@ -61,7 +61,7 @@ impl Miner {
         // Derive assoicated token address (for v1 account)
         let token_account_pubkey_v1 = spl_associated_token_account::get_associated_token_address(
             &signer.pubkey(),
-            &ore::MINT_V1_ADDRESS,
+            &ore_api::consts::MINT_V1_ADDRESS,
         );
 
         // Get token account balance
@@ -95,7 +95,7 @@ impl Miner {
         // Derive assoicated token address (ata)
         let token_account_pubkey = spl_associated_token_account::get_associated_token_address(
             &signer.pubkey(),
-            &ore::MINT_ADDRESS,
+            &ore_api::consts::MINT_ADDRESS,
         );
 
         // Check if ata already exists or init
@@ -104,7 +104,7 @@ impl Miner {
             let ix = spl_associated_token_account::instruction::create_associated_token_account(
                 &signer.pubkey(),
                 &signer.pubkey(),
-                &ore::MINT_ADDRESS,
+                &ore_api::consts::MINT_ADDRESS,
                 &spl_token::id(),
             );
             self.send_and_confirm(&[ix], ComputeBudget::Dynamic, false)
