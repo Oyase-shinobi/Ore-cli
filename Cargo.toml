@@ -1,6 +1,6 @@
 [package]
 name = "ore-cli"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 description = "A command line interface for the ORE cryptocurrency mining."
 license = "Apache-2.0"
 edition = "2021"
