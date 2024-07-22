@@ -7,11 +7,10 @@ impl Miner {
     pub async fn rewards(&self) {
         let config = get_config(&self.rpc_client).await;
         let base_reward_rate = config.base_reward_rate;
-        let base_difficulty = ore_api::consts::MIN_DIFFICULTY;
 
         let mut s = format!(
             "{}: {} ORE",
-            base_difficulty,
+            config.min_difficulty,
             amount_u64_to_string(base_reward_rate)
         )
         .to_string();
@@ -20,7 +19,7 @@ impl Miner {
             s = format!(
                 "{}\n{}: {} ORE",
                 s,
-                base_difficulty + i,
+                config.min_difficulty as u32 + i,
                 amount_u64_to_string(reward_rate)
             );
         }

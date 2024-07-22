@@ -43,22 +43,21 @@ impl Miner {
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx
-            let solution = Self::find_hash_par(proof, cutoff_time, args.threads).await;
+            let config = get_config(&self.rpc_client).await;
+            let solution = Self::find_hash_par(
+                proof,
+                cutoff_time,
+                args.threads,
+                config.min_difficulty as u32,
+            )
+            .await;
 
             // Submit most difficult hash
-            let config = get_config(&self.rpc_client).await;
             let mut compute_budget = 500_000;
             let mut ixs = vec![];
             if self.should_reset(config).await {
                 compute_budget += 100_000;
                 ixs.push(ore_api::instruction::reset(signer.pubkey()));
-            }
-            if self.should_crown(config, proof).await {
-                compute_budget += 250_000;
-                ixs.push(ore_api::instruction::crown(
-                    signer.pubkey(),
-                    config.top_staker,
-                ))
             }
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
@@ -72,7 +71,12 @@ impl Miner {
         }
     }
 
-    async fn find_hash_par(proof: Proof, cutoff_time: u64, threads: u64) -> Solution {
+    async fn find_hash_par(
+        proof: Proof,
+        cutoff_time: u64,
+        threads: u64,
+        min_difficulty: u32,
+    ) -> Solution {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining...");
@@ -106,7 +110,7 @@ impl Miner {
                             // Exit if time has elapsed
                             if nonce % 100 == 0 {
                                 if timer.elapsed().as_secs().ge(&cutoff_time) {
-                                    if best_difficulty.gt(&ore_api::consts::MIN_DIFFICULTY) {
+                                    if best_difficulty.gt(&min_difficulty) {
                                         // Mine until min difficulty has been met
                                         break;
                                     }
@@ -164,10 +168,6 @@ impl Miner {
                 num_cores
             );
         }
-    }
-
-    async fn should_crown(&self, config: Config, proof: Proof) -> bool {
-        proof.balance.gt(&config.max_stake)
     }
 
     async fn should_reset(&self, config: Config) -> bool {
