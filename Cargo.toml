@@ -1,6 +1,6 @@
 [package]
 name = "ore-cli"
-version = "1.0.0-alpha.5"
+version = "1.0.0-alpha.6"
 description = "A command line interface for the ORE cryptocurrency mining."
 license = "Apache-2.0"
 edition = "2021"
@@ -24,8 +24,8 @@ colored = "2.0"
 drillx = "2.0.0-beta.1"
 futures = "0.3.30"
 num_cpus = "1.16.0"
-ore-api = "2.0.0-beta.5"
-ore-utils = "2.0.0-beta.5"
+ore-api = "2.0.0-beta.6"
+ore-utils = "2.0.0-beta.6"
 rand = "0.8.4"
 solana-cli-config = "^1.18"
 solana-client = "^1.18"
@@ -39,7 +39,7 @@ spl-associated-token-account = { version = "^2.3", features = [
 ] }
 tokio = "1.35.1"
 
-# [patch.crates-io]
-# ore-api = { path = "../ore/api" }
-# ore-utils = { path = "../ore/utils" }
+[patch.crates-io]
+ore-api = { path = "../ore/api" }
+ore-utils = { path = "../ore/utils" }
 
