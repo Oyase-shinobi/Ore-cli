@@ -1,9 +1,14 @@
 [package]
 name = "ore-cli"
 version = "1.0.0"
-description = "A command line interface for ORE cryptocurrency mining."
-license = "Apache-2.0"
 edition = "2021"
+license = "Apache-2.0"
+description = "A command line interface for ORE cryptocurrency mining."
+documentation = "https://ore.supply"
+homepage = "https://ore.supply"
+repository = "https://github.com/regolith-labs/ore-cli"
+readme = "./README.md"
+keywords = ["solana", "crypto", "mining"]
 
 [[bin]]
 name = "ore"
