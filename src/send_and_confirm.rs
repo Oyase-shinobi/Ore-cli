@@ -72,8 +72,11 @@ impl Miner {
 
         let mut priority_fee = self.priority_fee.unwrap_or(0);
 
-        if let Some(dynamic_fee_rpc_url) = &self.dynamic_fee_rpc_url {
-            priority_fee = dynamic_fee::get_priority_fee_estimate(dynamic_fee_rpc_url).await.unwrap();
+        if let Some(dynamic_fee_url) = &self.dynamic_fee_url {
+            priority_fee = dynamic_fee::get_priority_fee_estimate(
+                dynamic_fee_url, 
+                self.dynamic_fee_strategy.as_ref().unwrap()
+            ).await.unwrap();  
         }
 
         final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));

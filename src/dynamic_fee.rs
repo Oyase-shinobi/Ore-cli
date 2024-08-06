@@ -3,15 +3,16 @@ use serde_json::{json, Value};
 
 pub async fn get_priority_fee_estimate(
     dynamic_fee_rpc_url: &str,
+    dynamic_fee_strategy: &str,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
 
     let result_spec;
 
-    if dynamic_fee_rpc_url.contains("helius") {
+    if dynamic_fee_strategy == "helius" {
       result_spec = "helius"
-    } else if dynamic_fee_rpc_url.contains("triton") {
-      result_spec = "triton_one"
+    } else if dynamic_fee_strategy == "rpcpool" {
+      result_spec = "rpcpool"
     } else {
       result_spec = "helius"
     }
@@ -19,16 +20,16 @@ pub async fn get_priority_fee_estimate(
 
     let body;
 
-    if result_spec == "triton_one" {
+    if result_spec == "rpcpool" {
         // Use the improved priority fees API
         body = json!({
             "jsonrpc": "2.0",
-            "id": "triton-test",
+            "id": "priority-fee-estimate",
             "method": "getRecentPrioritizationFees",
             "params": [
-                "oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ",
+                ["oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ"],
                 {
-                    "percentile": 8000,
+                    "percentile": 5000,
                 }
             ]
         })
@@ -36,7 +37,7 @@ pub async fn get_priority_fee_estimate(
         // Use the current implementation (Helius API)
         body = json!({
             "jsonrpc": "2.0",
-            "id": "helius-test",
+            "id": "priority-fee-estimate",
             "method": "getPriorityFeeEstimate",
             "params": [{
                 "accountKeys": ["oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ"],
@@ -54,7 +55,7 @@ pub async fn get_priority_fee_estimate(
         .json()
         .await?;
 
-    let priority_fee = if result_spec == "triton_one" {
+    let priority_fee = if result_spec == "rpcpool" {
         // Parse the improved priority fees API response
         response["result"]
             .as_array()
@@ -68,6 +69,8 @@ pub async fn get_priority_fee_estimate(
             .map(|fee| fee as u64)
             .ok_or_else(|| format!("Failed to parse priority fee. Response: {:?}", response))?
     };
+
+    println!("Current dynamic priority fee: {} (via {})", priority_fee, result_spec);
 
     Ok(priority_fee)
 }

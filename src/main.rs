@@ -30,7 +30,8 @@ use solana_sdk::{
 struct Miner {
     pub keypair_filepath: Option<String>,
     pub priority_fee: Option<u64>,
-    pub dynamic_fee_rpc_url: Option<String>,
+    pub dynamic_fee_url: Option<String>,
+    pub dynamic_fee_strategy: Option<String>,
     pub rpc_client: Arc<RpcClient>,
 }
 
@@ -114,7 +115,16 @@ struct Args {
         help = "RPC URL to use for dynamic fee estimation. If set will enable dynamic fee pricing instead of static priority fee pricing.",
         global = true
     )]
-    dynamic_fee_rpc_url: Option<String>,
+    dynamic_fee_url: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_STRATEGY",
+        help = "Strategy to use for dynamic fee estimation. Must be one of 'helius', or 'rpcpool'.",
+        default_value = "helius",
+        global = true
+    )]
+    dynamic_fee_strategy: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -145,7 +155,8 @@ async fn main() {
         Arc::new(rpc_client),
         args.priority_fee,
         Some(default_keypair),
-        args.dynamic_fee_rpc_url,
+        args.dynamic_fee_url,
+        args.dynamic_fee_strategy,
     ));
 
     // Execute user command.
@@ -192,13 +203,15 @@ impl Miner {
         rpc_client: Arc<RpcClient>,
         priority_fee: Option<u64>,
         keypair_filepath: Option<String>,
-        dynamic_fee_rpc_url: Option<String>,
+        dynamic_fee_url: Option<String>,
+        dynamic_fee_strategy: Option<String>,
     ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
             priority_fee,
-            dynamic_fee_rpc_url,
+            dynamic_fee_url,
+            dynamic_fee_strategy,
         }
     }
 
