@@ -32,6 +32,7 @@ struct Miner {
     pub priority_fee: Option<u64>,
     pub dynamic_fee_url: Option<String>,
     pub dynamic_fee_strategy: Option<String>,
+    pub dynamic_fee_max: Option<u64>,
     pub rpc_client: Arc<RpcClient>,
 }
 
@@ -111,7 +112,7 @@ struct Args {
 
     #[arg(
         long,
-        value_name = "DYNAMIC_FEE_RPC_URL",
+        value_name = "DYNAMIC_FEE_URL",
         help = "RPC URL to use for dynamic fee estimation. If set will enable dynamic fee pricing instead of static priority fee pricing.",
         global = true
     )]
@@ -125,6 +126,15 @@ struct Args {
         global = true
     )]
     dynamic_fee_strategy: Option<String>,
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_MAX",
+        help = "Maximum priority fee to use for dynamic fee estimation.",
+        default_value = "500000",
+        global = true
+    )]
+    dynamic_fee_max: Option<u64>,
+    
 
     #[command(subcommand)]
     command: Commands,
@@ -157,6 +167,7 @@ async fn main() {
         Some(default_keypair),
         args.dynamic_fee_url,
         args.dynamic_fee_strategy,
+        args.dynamic_fee_max,
     ));
 
     // Execute user command.
@@ -205,6 +216,7 @@ impl Miner {
         keypair_filepath: Option<String>,
         dynamic_fee_url: Option<String>,
         dynamic_fee_strategy: Option<String>,
+        dynamic_fee_max: Option<u64>,
     ) -> Self {
         Self {
             rpc_client,
@@ -212,6 +224,7 @@ impl Miner {
             priority_fee,
             dynamic_fee_url,
             dynamic_fee_strategy,
+            dynamic_fee_max,
         }
     }
 

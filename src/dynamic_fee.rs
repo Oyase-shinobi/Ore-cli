@@ -56,7 +56,7 @@ impl Miner {
                     .await
                     .unwrap();
 
-                match strategy.as_str() {
+                let calculated_fee = match strategy.as_str() {
                     "helius" => response["result"]["priorityFeeEstimate"]
                         .as_f64()
                         .map(|fee| fee as u64)
@@ -73,6 +73,13 @@ impl Miner {
                         })
                         .unwrap(),
                     _ => return self.priority_fee.unwrap_or(0),
+                };
+
+                // Check if the calculated fee is higher than self.dynamic_fee_max
+                if let Some(max_fee) = self.dynamic_fee_max {
+                    calculated_fee.min(max_fee)
+                } else {
+                    calculated_fee
                 }
             }
         }
