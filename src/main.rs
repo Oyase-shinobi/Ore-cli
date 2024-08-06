@@ -30,6 +30,7 @@ struct Miner {
     pub keypair_filepath: Option<String>,
     pub priority_fee: u64,
     pub rpc_client: Arc<RpcClient>,
+    pub fee_payer_filepath: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -99,6 +100,14 @@ struct Args {
 
     #[arg(
         long,
+        value_name = "FEE_PAYER_FILEPATH",
+        help = "Filepath to keypair to use for fee payer",
+        global = true
+    )]
+    fee_payer_filepath: Option<String>,
+
+    #[arg(
+        long,
         value_name = "MICROLAMPORTS",
         help = "Number of microlamports to pay as priority fee per transaction",
         default_value = "0",
@@ -128,13 +137,15 @@ async fn main() {
 
     // Initialize miner.
     let cluster = args.rpc.unwrap_or(cli_config.json_rpc_url);
-    let default_keypair = args.keypair.unwrap_or(cli_config.keypair_path);
+    let default_keypair = args.keypair.unwrap_or(cli_config.keypair_path.clone());
+    let fee_payer_filepath = args.fee_payer_filepath.unwrap_or(cli_config.keypair_path.clone());
     let rpc_client = RpcClient::new_with_commitment(cluster, CommitmentConfig::confirmed());
 
     let miner = Arc::new(Miner::new(
         Arc::new(rpc_client),
         args.priority_fee,
         Some(default_keypair),
+        Some(fee_payer_filepath),
     ));
 
     // Execute user command.
@@ -181,11 +192,13 @@ impl Miner {
         rpc_client: Arc<RpcClient>,
         priority_fee: u64,
         keypair_filepath: Option<String>,
+        fee_payer_filepath: Option<String>,
     ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
             priority_fee,
+            fee_payer_filepath
         }
     }
 
@@ -194,6 +207,14 @@ impl Miner {
             Some(filepath) => read_keypair_file(filepath.clone())
                 .expect(format!("No keypair found at {}", filepath).as_str()),
             None => panic!("No keypair provided"),
+        }
+    }
+
+    pub fn fee_payer(&self) -> Keypair {
+        match self.fee_payer_filepath.clone() {
+            Some(filepath) => read_keypair_file(filepath.clone())
+                .expect(format!("No fee payer keypair found at {}", filepath).as_str()),
+            None => panic!("No fee payer keypair provided"),
         }
     }
 }
