@@ -18,7 +18,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{TransactionConfirmationStatus, UiTransactionEncoding};
 
-use crate::Miner;
+use crate::{Miner, dynamic_fee};
 
 const MIN_SOL_BALANCE: f64 = 0.005;
 
@@ -69,9 +69,14 @@ impl Miner {
                 final_ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(cus))
             }
         }
-        final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
-            self.priority_fee,
-        ));
+
+        let mut priority_fee = self.priority_fee.unwrap_or(0);
+
+        if let Some(dynamic_fee_rpc_url) = &self.dynamic_fee_rpc_url {
+            priority_fee = dynamic_fee::get_priority_fee_estimate(dynamic_fee_rpc_url).await.unwrap();
+        }
+
+        final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));
         final_ixs.extend_from_slice(ixs);
 
         // Build tx
@@ -94,7 +99,7 @@ impl Miner {
         // Submit tx
         let mut attempts = 0;
         loop {
-            progress_bar.set_message(format!("Submitting transaction... (attempt {})", attempts));
+            progress_bar.set_message(format!("Submitting transaction... (attempt {} with priority fee {})", attempts, priority_fee));
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
                     // Skip confirmation

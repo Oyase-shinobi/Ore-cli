@@ -15,6 +15,7 @@ mod send_and_confirm;
 mod stake;
 mod upgrade;
 mod utils;
+mod dynamic_fee;
 
 use std::sync::Arc;
 
@@ -28,7 +29,8 @@ use solana_sdk::{
 
 struct Miner {
     pub keypair_filepath: Option<String>,
-    pub priority_fee: u64,
+    pub priority_fee: Option<u64>,
+    pub dynamic_fee_rpc_url: Option<String>,
     pub rpc_client: Arc<RpcClient>,
 }
 
@@ -104,7 +106,15 @@ struct Args {
         default_value = "0",
         global = true
     )]
-    priority_fee: u64,
+    priority_fee: Option<u64>,
+
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_RPC_URL",
+        help = "RPC URL to use for dynamic fee estimation. If set will enable dynamic fee pricing instead of static priority fee pricing.",
+        global = true
+    )]
+    dynamic_fee_rpc_url: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -135,6 +145,7 @@ async fn main() {
         Arc::new(rpc_client),
         args.priority_fee,
         Some(default_keypair),
+        args.dynamic_fee_rpc_url,
     ));
 
     // Execute user command.
@@ -179,13 +190,15 @@ async fn main() {
 impl Miner {
     pub fn new(
         rpc_client: Arc<RpcClient>,
-        priority_fee: u64,
+        priority_fee: Option<u64>,
         keypair_filepath: Option<String>,
+        dynamic_fee_rpc_url: Option<String>,
     ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
             priority_fee,
+            dynamic_fee_rpc_url,
         }
     }
 
