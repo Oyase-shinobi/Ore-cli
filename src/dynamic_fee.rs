@@ -1,11 +1,6 @@
 use reqwest;
 use serde_json::{json, Value};
-
-const ORE_ADDRESSES: [&str; 3] = [
-  "oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ",
-  "2oLNTQKRb4a2117kFi6BYTUDu3RPrMVAHFhCfPKMosxX",
-  "5HngGmYzvSuh3XyU11brHDpMTHXQQRQQT4udGFtQSjgR"
-];
+use ore_api::consts::BUS_ADDRESSES;
 
 pub async fn get_priority_fee_estimate(
     dynamic_fee_rpc_url: &str,
@@ -14,6 +9,10 @@ pub async fn get_priority_fee_estimate(
     let client = reqwest::Client::new();
 
     let result_spec;
+
+    let ore_addresses: Vec<String> = std::iter::once("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ".to_string())
+        .chain(BUS_ADDRESSES.iter().map(|pubkey| pubkey.to_string()))
+        .collect();
 
     if dynamic_fee_strategy == "helius" {
       result_spec = "helius"
@@ -33,7 +32,7 @@ pub async fn get_priority_fee_estimate(
             "id": "priority-fee-estimate",
             "method": "getRecentPrioritizationFees",
             "params": [
-              ORE_ADDRESSES,
+              ore_addresses,
                 {
                     "percentile": 5000,
                 }
@@ -46,7 +45,7 @@ pub async fn get_priority_fee_estimate(
             "id": "priority-fee-estimate",
             "method": "getPriorityFeeEstimate",
             "params": [{
-                "accountKeys": ORE_ADDRESSES,
+                "accountKeys": ore_addresses,
                 "options": {
                     "recommended": true
                 }
