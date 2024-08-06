@@ -1,6 +1,12 @@
 use reqwest;
 use serde_json::{json, Value};
 
+const ORE_ADDRESSES: [&str; 3] = [
+  "oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ",
+  "2oLNTQKRb4a2117kFi6BYTUDu3RPrMVAHFhCfPKMosxX",
+  "5HngGmYzvSuh3XyU11brHDpMTHXQQRQQT4udGFtQSjgR"
+];
+
 pub async fn get_priority_fee_estimate(
     dynamic_fee_rpc_url: &str,
     dynamic_fee_strategy: &str,
@@ -27,7 +33,7 @@ pub async fn get_priority_fee_estimate(
             "id": "priority-fee-estimate",
             "method": "getRecentPrioritizationFees",
             "params": [
-                ["oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ"],
+              ORE_ADDRESSES,
                 {
                     "percentile": 5000,
                 }
@@ -40,7 +46,7 @@ pub async fn get_priority_fee_estimate(
             "id": "priority-fee-estimate",
             "method": "getPriorityFeeEstimate",
             "params": [{
-                "accountKeys": ["oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ"],
+                "accountKeys": ORE_ADDRESSES,
                 "options": {
                     "recommended": true
                 }
