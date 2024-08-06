@@ -11,8 +11,8 @@ pub async fn get_priority_fee_estimate(
 
     if dynamic_fee_strategy == "helius" {
       result_spec = "helius"
-    } else if dynamic_fee_strategy == "rpcpool" {
-      result_spec = "rpcpool"
+    } else if dynamic_fee_strategy == "triton" {
+      result_spec = "triton"
     } else {
       result_spec = "helius"
     }
@@ -20,7 +20,7 @@ pub async fn get_priority_fee_estimate(
 
     let body;
 
-    if result_spec == "rpcpool" {
+    if result_spec == "triton" {
         // Use the improved priority fees API
         body = json!({
             "jsonrpc": "2.0",
@@ -55,7 +55,7 @@ pub async fn get_priority_fee_estimate(
         .json()
         .await?;
 
-    let priority_fee = if result_spec == "rpcpool" {
+    let priority_fee = if result_spec == "triton" {
         // Parse the improved priority fees API response
         response["result"]
             .as_array()
