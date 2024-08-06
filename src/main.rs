@@ -15,6 +15,7 @@ mod send_and_confirm;
 mod stake;
 mod upgrade;
 mod utils;
+mod dynamic_fee;
 
 use std::sync::Arc;
 
@@ -28,7 +29,10 @@ use solana_sdk::{
 
 struct Miner {
     pub keypair_filepath: Option<String>,
-    pub priority_fee: u64,
+    pub priority_fee: Option<u64>,
+    pub dynamic_fee_url: Option<String>,
+    pub dynamic_fee_strategy: Option<String>,
+    pub dynamic_fee_max: Option<u64>,
     pub rpc_client: Arc<RpcClient>,
     pub fee_payer_filepath: Option<String>,
 }
@@ -113,7 +117,33 @@ struct Args {
         default_value = "0",
         global = true
     )]
-    priority_fee: u64,
+    priority_fee: Option<u64>,
+
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_URL",
+        help = "RPC URL to use for dynamic fee estimation. If set will enable dynamic fee pricing instead of static priority fee pricing.",
+        global = true
+    )]
+    dynamic_fee_url: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_STRATEGY",
+        help = "Strategy to use for dynamic fee estimation. Must be one of 'helius', or 'triton'.",
+        default_value = "helius",
+        global = true
+    )]
+    dynamic_fee_strategy: Option<String>,
+    #[arg(
+        long,
+        value_name = "DYNAMIC_FEE_MAX",
+        help = "Maximum priority fee to use for dynamic fee estimation.",
+        default_value = "500000",
+        global = true
+    )]
+    dynamic_fee_max: Option<u64>,
+    
 
     #[command(subcommand)]
     command: Commands,
@@ -145,6 +175,9 @@ async fn main() {
         Arc::new(rpc_client),
         args.priority_fee,
         Some(default_keypair),
+        args.dynamic_fee_url,
+        args.dynamic_fee_strategy,
+        args.dynamic_fee_max,
         Some(fee_payer_filepath),
     ));
 
@@ -190,14 +223,20 @@ async fn main() {
 impl Miner {
     pub fn new(
         rpc_client: Arc<RpcClient>,
-        priority_fee: u64,
+        priority_fee: Option<u64>,
         keypair_filepath: Option<String>,
+        dynamic_fee_url: Option<String>,
+        dynamic_fee_strategy: Option<String>,
+        dynamic_fee_max: Option<u64>,
         fee_payer_filepath: Option<String>,
     ) -> Self {
         Self {
             rpc_client,
             keypair_filepath,
             priority_fee,
+            dynamic_fee_url,
+            dynamic_fee_strategy,
+            dynamic_fee_max,
             fee_payer_filepath
         }
     }
