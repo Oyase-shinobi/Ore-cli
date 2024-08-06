@@ -81,7 +81,6 @@ impl Miner {
 
         final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));
         final_ixs.extend_from_slice(ixs);
-        final_ixs.extend_from_slice(ixs);
 
         // Build tx
         let send_cfg = RpcSendTransactionConfig {
