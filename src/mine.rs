@@ -33,17 +33,18 @@ impl Miner {
         // Start mining loop
         loop {
             // Fetch proof
+            let config = get_config(&self.rpc_client).await;
             let proof = get_proof_with_authority(&self.rpc_client, signer.pubkey()).await;
             println!(
-                "\nStake balance: {} ORE",
-                amount_u64_to_string(proof.balance)
+                "\nStake: {} ORE\n  Multiplier: {:12}x",
+                amount_u64_to_string(proof.balance),
+                calculate_multiplier(proof.balance, config.top_balance)
             );
 
             // Calc cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx
-            let config = get_config(&self.rpc_client).await;
             let solution = Self::find_hash_par(
                 proof,
                 cutoff_time,
@@ -188,6 +189,10 @@ impl Miner {
             .saturating_sub(clock.unix_timestamp)
             .max(0) as u64
     }
+}
+
+fn calculate_multiplier(balance: u64, top_balance: u64) -> f64 {
+    1.0 + (balance as f64 / top_balance as f64).min(1.0f64)
 }
 
 // TODO Pick a better strategy (avoid draining bus)
