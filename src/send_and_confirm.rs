@@ -18,7 +18,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{TransactionConfirmationStatus, UiTransactionEncoding};
 
-use crate::{Miner, dynamic_fee};
+use crate::Miner;
 
 const MIN_SOL_BALANCE: f64 = 0.005;
 
@@ -70,16 +70,17 @@ impl Miner {
             }
         }
 
-        let mut priority_fee = self.priority_fee.unwrap_or(0);
-
-        if let Some(dynamic_fee_url) = &self.dynamic_fee_url {
-            priority_fee = dynamic_fee::get_priority_fee_estimate(
-                dynamic_fee_url, 
-                self.dynamic_fee_strategy.as_ref().unwrap()
-            ).await.unwrap();  
-        }
+        let priority_fee = match &self.dynamic_fee_url {
+            Some(_) => {
+                self.dynamic_fee().await
+            }
+            None => {
+                self.priority_fee.unwrap_or(0)
+            }
+        };
 
         final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));
+        final_ixs.extend_from_slice(ixs);
         final_ixs.extend_from_slice(ixs);
 
         // Build tx
@@ -102,7 +103,14 @@ impl Miner {
         // Submit tx
         let mut attempts = 0;
         loop {
-            progress_bar.set_message(format!("Submitting transaction... (attempt {} with priority fee {})", attempts, priority_fee));
+
+            let message = match &self.dynamic_fee_url {
+                Some(_) => format!("Submitting transaction... (attempt {} with dynamic priority fee of {} via {})", attempts, priority_fee, self.dynamic_fee_strategy.as_ref().unwrap()),
+                None => format!("Submitting transaction... (attempt {} with static priority fee of {})", attempts, priority_fee),
+            };
+
+            progress_bar.set_message(message);
+
             match client.send_transaction_with_config(&tx, send_cfg).await {
                 Ok(sig) => {
                     // Skip confirmation
