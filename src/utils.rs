@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, time::Duration};
 
 use cached::proc_macro::cached;
 use ore_api::{
@@ -32,6 +32,20 @@ pub async fn get_config(client: &RpcClient) -> Config {
 pub async fn get_proof_with_authority(client: &RpcClient, authority: Pubkey) -> Proof {
     let proof_address = proof_pubkey(authority);
     get_proof(client, proof_address).await
+}
+
+pub async fn get_updated_proof_with_authority(
+    client: &RpcClient,
+    authority: Pubkey,
+    lash_hash_at: i64,
+) -> Proof {
+    loop {
+        let proof = get_proof_with_authority(client, authority).await;
+        if proof.last_hash_at.gt(&lash_hash_at) {
+            return proof;
+        }
+        std::thread::sleep(Duration::from_millis(1000));
+    }
 }
 
 pub async fn get_proof(client: &RpcClient, address: Pubkey) -> Proof {
