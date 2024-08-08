@@ -6,16 +6,17 @@ mod claim;
 mod close;
 mod config;
 mod cu_limits;
+mod dynamic_fee;
 #[cfg(feature = "admin")]
 mod initialize;
 mod mine;
 mod open;
+mod proof;
 mod rewards;
 mod send_and_confirm;
 mod stake;
 mod upgrade;
 mod utils;
-mod dynamic_fee;
 
 use std::sync::Arc;
 
@@ -59,6 +60,9 @@ enum Commands {
 
     #[command(about = "Start mining")]
     Mine(MineArgs),
+
+    #[command(about = "Proof")]
+    Proof(ProofArgs),
 
     #[command(about = "Fetch the current reward rate for each difficulty level")]
     Rewards(RewardsArgs),
@@ -143,7 +147,6 @@ struct Args {
         global = true
     )]
     dynamic_fee_max: Option<u64>,
-    
 
     #[command(subcommand)]
     command: Commands,
@@ -168,7 +171,9 @@ async fn main() {
     // Initialize miner.
     let cluster = args.rpc.unwrap_or(cli_config.json_rpc_url);
     let default_keypair = args.keypair.unwrap_or(cli_config.keypair_path.clone());
-    let fee_payer_filepath = args.fee_payer_filepath.unwrap_or(cli_config.keypair_path.clone());
+    let fee_payer_filepath = args
+        .fee_payer_filepath
+        .unwrap_or(cli_config.keypair_path.clone());
     let rpc_client = RpcClient::new_with_commitment(cluster, CommitmentConfig::confirmed());
 
     let miner = Arc::new(Miner::new(
@@ -204,6 +209,9 @@ async fn main() {
         Commands::Mine(args) => {
             miner.mine(args).await;
         }
+        Commands::Proof(args) => {
+            miner.proof(args).await;
+        }
         Commands::Rewards(_) => {
             miner.rewards().await;
         }
@@ -237,7 +245,7 @@ impl Miner {
             dynamic_fee_url,
             dynamic_fee_strategy,
             dynamic_fee_max,
-            fee_payer_filepath
+            fee_payer_filepath,
         }
     }
 
