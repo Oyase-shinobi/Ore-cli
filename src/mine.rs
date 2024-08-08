@@ -13,7 +13,7 @@ use ore_utils::AccountDeserialize;
 use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
-use solana_sdk::{account, signer::Signer};
+use solana_sdk::signer::Signer;
 
 use crate::{
     args::MineArgs,
