@@ -86,53 +86,58 @@ impl Miner {
                     let progress_bar = progress_bar.clone();
                     let mut memory = equix::SolverMemory::new();
                     move || {
-                        let res = core_affinity::set_for_current(i);
-                        if res {
-                            let timer = Instant::now();
-                            let mut nonce =
-                                u64::MAX.saturating_div(cores).saturating_mul(i.id as u64);
-                            let mut best_nonce = nonce;
-                            let mut best_difficulty = 0;
-                            let mut best_hash = Hash::default();
-                            loop {
-                                // Create hash
-                                if let Ok(hx) = drillx::hash_with_memory(
-                                    &mut memory,
-                                    &proof.challenge,
-                                    &nonce.to_le_bytes(),
-                                ) {
-                                    let difficulty = hx.difficulty();
-                                    if difficulty.gt(&best_difficulty) {
-                                        best_nonce = nonce;
-                                        best_difficulty = difficulty;
-                                        best_hash = hx;
-                                    }
-                                }
+                        // Return if core should not be used
+                        if (i.id as u64).ge(&cores) {
+                            return (0, 0, Hash::default());
+                        }
 
-                                // Exit if time has elapsed
-                                if nonce % 100 == 0 {
-                                    if timer.elapsed().as_secs().ge(&cutoff_time) {
-                                        if best_difficulty.ge(&min_difficulty) {
-                                            // Mine until min difficulty has been met
-                                            break;
-                                        }
-                                    } else if cores == 0 {
-                                        progress_bar.set_message(format!(
-                                            "Mining... ({} sec remaining)",
-                                            cutoff_time.saturating_sub(timer.elapsed().as_secs()),
-                                        ));
-                                    }
-                                }
+                        // Pin to core
+                        if !core_affinity::set_for_current(i) {
+                            return (0, 0, Hash::default());
+                        }
 
-                                // Increment nonce
-                                nonce += 1;
+                        // Start hashing
+                        let timer = Instant::now();
+                        let mut nonce = u64::MAX.saturating_div(cores).saturating_mul(i.id as u64);
+                        let mut best_nonce = nonce;
+                        let mut best_difficulty = 0;
+                        let mut best_hash = Hash::default();
+                        loop {
+                            // Create hash
+                            if let Ok(hx) = drillx::hash_with_memory(
+                                &mut memory,
+                                &proof.challenge,
+                                &nonce.to_le_bytes(),
+                            ) {
+                                let difficulty = hx.difficulty();
+                                if difficulty.gt(&best_difficulty) {
+                                    best_nonce = nonce;
+                                    best_difficulty = difficulty;
+                                    best_hash = hx;
+                                }
                             }
 
-                            // Return the best nonce
-                            (best_nonce, best_difficulty, best_hash)
-                        } else {
-                            (0, 0, Hash::default())
+                            // Exit if time has elapsed
+                            if nonce % 100 == 0 {
+                                if timer.elapsed().as_secs().ge(&cutoff_time) {
+                                    if best_difficulty.ge(&min_difficulty) {
+                                        // Mine until min difficulty has been met
+                                        break;
+                                    }
+                                } else if cores == 0 {
+                                    progress_bar.set_message(format!(
+                                        "Mining... ({} sec remaining)",
+                                        cutoff_time.saturating_sub(timer.elapsed().as_secs()),
+                                    ));
+                                }
+                            }
+
+                            // Increment nonce
+                            nonce += 1;
                         }
+
+                        // Return the best nonce
+                        (best_nonce, best_difficulty, best_hash)
                     }
                 })
             })
