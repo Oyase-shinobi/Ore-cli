@@ -92,9 +92,7 @@ impl Miner {
                         }
 
                         // Pin to core
-                        if !core_affinity::set_for_current(i) {
-                            return (0, 0, Hash::default());
-                        }
+                        let _ = core_affinity::set_for_current(i);
 
                         // Start hashing
                         let timer = Instant::now();
