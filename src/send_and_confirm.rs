@@ -85,8 +85,8 @@ impl Miner {
         loop {
             progress_bar.set_message(format!("Submitting transaction... (attempt {})", attempts,));
 
-            // Sign tx with a new blockhash
-            if attempts % 5 == 0 {
+            // Sign tx with a new blockhash (after approximately ~45 sec)
+            if attempts % 10 == 0 {
                 // Reset the compute unit price
                 if self.dynamic_fee {
                     let fee = if let Some(fee) = self.dynamic_fee().await {
