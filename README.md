@@ -11,15 +11,15 @@ cargo install ore-cli
 ```
 
 
-#### Dependencies
-If you run into installation issues, please install the dependencies listed below for your operating system and try again:
+### Dependencies
+If you run into issues during installation, please install the following dependencies for your operating system and try again:
 
-Linux
+#### Linux
 ```
 sudo apt-get install openssl pkg-config libssl-dev
 ```
 
-MacOS (using [Homebrew](https://brew.sh/))
+#### MacOS (using [Homebrew](https://brew.sh/))
 ```
 brew install openssl pkg-config
 
@@ -29,7 +29,7 @@ export LDFLAGS="-L/usr/local/opt/openssl/lib"
 export CPPFLAGS="-I/usr/local/opt/openssl/include"
 ```
 
-Windows (using [Chocolatey](https://chocolatey.org/))
+#### Windows (using [Chocolatey](https://chocolatey.org/))
 ```
 choco install pkgconfiglite
 ```
