@@ -31,7 +31,7 @@ export CPPFLAGS="-I/usr/local/opt/openssl/include"
 
 #### Windows (using [Chocolatey](https://chocolatey.org/))
 ```
-choco install pkgconfiglite
+choco install openssl pkgconfiglite
 ```
 
 ## Build
