@@ -46,6 +46,7 @@ spl-associated-token-account = { version = "^2.3", features = [
   "no-entrypoint",
 ] }
 tokio = "1.35.1"
+url = "2.5"
 
 # [patch.crates-io]
 # drillx = { path = "../drillx/drillx" }

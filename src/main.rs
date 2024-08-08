@@ -32,7 +32,7 @@ struct Miner {
     pub keypair_filepath: Option<String>,
     pub priority_fee: Option<u64>,
     pub dynamic_fee_url: Option<String>,
-    pub dynamic_fee_strategy: Option<String>,
+    pub dynamic_fee: bool,
     pub rpc_client: Arc<RpcClient>,
     pub fee_payer_filepath: Option<String>,
 }
@@ -100,7 +100,7 @@ struct Args {
     #[arg(
         long,
         value_name = "KEYPAIR_FILEPATH",
-        help = "Filepath to keypair to use",
+        help = "Filepath to keypair to use.",
         global = true
     )]
     keypair: Option<String>,
@@ -108,7 +108,7 @@ struct Args {
     #[arg(
         long,
         value_name = "FEE_PAYER_FILEPATH",
-        help = "Filepath to keypair to use as transaction fee payer",
+        help = "Filepath to keypair to use as transaction fee payer.",
         global = true
     )]
     fee_payer: Option<String>,
@@ -116,7 +116,7 @@ struct Args {
     #[arg(
         long,
         value_name = "MICROLAMPORTS",
-        help = "Price to pay for compute unit. If dynamic fee url is also set, this value will be the max.",
+        help = "Price to pay for compute units. If dynamic fees are being used, this value will be the max.",
         default_value = "500000",
         global = true
     )]
@@ -130,13 +130,8 @@ struct Args {
     )]
     dynamic_fee_url: Option<String>,
 
-    #[arg(
-        long,
-        value_name = "DYNAMIC_FEE_STRATEGY",
-        help = "Strategy to use for dynamic fee estimation. Must be one of 'helius', or 'triton'.",
-        global = true
-    )]
-    dynamic_fee_strategy: Option<String>,
+    #[arg(long, help = "Use dynamic priority fees", global = true)]
+    dynamic_fee: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -169,7 +164,7 @@ async fn main() {
         args.priority_fee,
         Some(default_keypair),
         args.dynamic_fee_url,
-        args.dynamic_fee_strategy,
+        args.dynamic_fee,
         Some(fee_payer_filepath),
     ));
 
@@ -221,7 +216,7 @@ impl Miner {
         priority_fee: Option<u64>,
         keypair_filepath: Option<String>,
         dynamic_fee_url: Option<String>,
-        dynamic_fee_strategy: Option<String>,
+        dynamic_fee: bool,
         fee_payer_filepath: Option<String>,
     ) -> Self {
         Self {
@@ -229,7 +224,7 @@ impl Miner {
             keypair_filepath,
             priority_fee,
             dynamic_fee_url,
-            dynamic_fee_strategy,
+            dynamic_fee,
             fee_payer_filepath,
         }
     }

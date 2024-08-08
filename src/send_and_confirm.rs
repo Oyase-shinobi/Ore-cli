@@ -88,11 +88,17 @@ impl Miner {
             // Sign tx with a new blockhash
             if attempts % 5 == 0 {
                 // Reset the compute unit price
-                if self.dynamic_fee_strategy.is_some() {
-                    let fee = self.dynamic_fee().await;
+                if self.dynamic_fee {
+                    let fee = if let Some(fee) = self.dynamic_fee().await {
+                        progress_bar.println(format!("  Priority fee: {} microlamports", fee));
+                        fee
+                    } else {
+                        let fee = self.priority_fee.unwrap_or(0);
+                        progress_bar.println(format!("  {} Dynamic fees not supported by this RPC. Falling back to static value: {} microlamports", "WARNING".bold().yellow(), fee));
+                        fee
+                    };
                     final_ixs.remove(1);
                     final_ixs.insert(1, ComputeBudgetInstruction::set_compute_unit_price(fee));
-                    progress_bar.println(format!("  Priority fee: {} microlamports", fee));
                 }
 
                 // Resign the tx
