@@ -122,7 +122,7 @@ impl Miner {
                                         // Mine until min difficulty has been met
                                         break;
                                     }
-                                } else if cores == 0 {
+                                } else if i.id == 0 {
                                     progress_bar.set_message(format!(
                                         "Mining... ({} sec remaining)",
                                         cutoff_time.saturating_sub(timer.elapsed().as_secs()),
