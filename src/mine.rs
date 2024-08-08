@@ -24,7 +24,7 @@ use crate::{
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
-        // Register, if needed.
+        // Open account, if needed.
         let signer = self.signer();
         self.open().await;
 
@@ -42,7 +42,7 @@ impl Miner {
                 calculate_multiplier(proof.balance, config.top_balance)
             );
 
-            // Calc cutoff time
+            // Calculate cutoff time
             let cutoff_time = self.get_cutoff(proof, args.buffer_time).await;
 
             // Run drillx
@@ -50,19 +50,23 @@ impl Miner {
                 Self::find_hash_par(proof, cutoff_time, args.cores, config.min_difficulty as u32)
                     .await;
 
-            // Submit most difficult hash
-            let mut compute_budget = 500_000;
+            // Build instruction set
             let mut ixs = vec![ore_api::instruction::auth(proof_pubkey(signer.pubkey()))];
+            let mut compute_budget = 500_000;
             if self.should_reset(config).await && rand::thread_rng().gen_range(0..100).eq(&0) {
                 compute_budget += 100_000;
                 ixs.push(ore_api::instruction::reset(signer.pubkey()));
             }
+
+            // Build mine ix
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
                 signer.pubkey(),
                 self.find_bus().await,
                 solution,
             ));
+
+            // Submit transaction
             self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
                 .await
                 .ok();
