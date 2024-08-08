@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use drillx::equix;
 use solana_rpc_client::spinner;
 
 use crate::{args::BenchmarkArgs, Miner};
@@ -9,7 +10,7 @@ const TEST_DURATION: i64 = 30;
 impl Miner {
     pub async fn benchmark(&self, args: BenchmarkArgs) {
         // Check num threads
-        self.check_num_cores(args.threads);
+        self.check_num_cores(args.cores);
 
         // Dispatch job to each thread
         let challenge = [0; 32];
@@ -18,16 +19,33 @@ impl Miner {
             "Benchmarking. This will take {} sec...",
             TEST_DURATION
         ));
-        let handles: Vec<_> = (0..args.threads)
+        let core_ids = core_affinity::get_core_ids().unwrap();
+        let handles: Vec<_> = core_ids
+            .into_iter()
             .map(|i| {
                 std::thread::spawn({
                     move || {
                         let timer = Instant::now();
-                        let first_nonce = u64::MAX.saturating_div(args.threads).saturating_mul(i);
+                        let first_nonce = u64::MAX
+                            .saturating_div(args.cores)
+                            .saturating_mul(i.id as u64);
                         let mut nonce = first_nonce;
+                        let mut memory = equix::SolverMemory::new();
                         loop {
+                            // Return if core should not be used
+                            if (i.id as u64).ge(&args.cores) {
+                                return 0;
+                            }
+
+                            // Pin to core
+                            let _ = core_affinity::set_for_current(i);
+
                             // Create hash
-                            let _hx = drillx::hash(&challenge, &nonce.to_le_bytes());
+                            let _hx = drillx::hash_with_memory(
+                                &mut memory,
+                                &challenge,
+                                &nonce.to_le_bytes(),
+                            );
 
                             // Increment nonce
                             nonce += 1;

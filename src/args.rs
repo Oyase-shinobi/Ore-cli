@@ -16,10 +16,10 @@ pub struct BenchmarkArgs {
         long,
         short,
         value_name = "THREAD_COUNT",
-        help = "The number of threads to use during the benchmark",
+        help = "The number of cores to use during the benchmark",
         default_value = "1"
     )]
-    pub threads: u64,
+    pub cores: u64,
 }
 
 #[derive(Parser, Debug)]
