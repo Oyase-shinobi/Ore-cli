@@ -5,7 +5,7 @@ use ore_api::{
 use ore_utils::AccountDeserialize;
 
 use crate::Miner;
-
+                     
 impl Miner {
     pub async fn busses(&self) {
         let client = self.rpc_client.clone();
